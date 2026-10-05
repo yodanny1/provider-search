@@ -86,7 +86,7 @@
     </div>
     <h2 style="margin-top:14px">Doctors</h2>
     <table id="docs">
-      <thead><tr><th>Priority</th><th>First name</th><th>Last name</th><th>City</th><th>Specialty (optional)</th><th></th></tr></thead>
+      <thead><tr><th>Priority</th><th>First name</th><th>Last name</th><th>City</th><th>NPI (optional)</th><th>Specialty (optional)</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
     <div class="row" style="margin-top:8px">
@@ -208,16 +208,22 @@ async function nppesLookup(doc){
   const p = new URLSearchParams({ version:"2.1", first_name:doc.first.trim(), last_name:doc.last.trim(), state:"CA", limit:"50", enumeration_type:"NPI-1" });
   if (!doc.first.trim()) p.delete("first_name");
   let j = await getJSON(NPPES + "?" + p);
-  let list = (j.results || []).map(r => {
-    const a = (r.addresses || []).find(x => x.address_purpose === "LOCATION") || (r.addresses || [])[0] || {};
-    const tx = (r.taxonomies || []).find(t => t.primary) || (r.taxonomies || [])[0] || {};
-    return { npi: String(r.number), name: [r.basic.first_name, r.basic.middle_name, r.basic.last_name].filter(Boolean).join(" ") + (r.basic.credential ? ", " + r.basic.credential : ""),
-             city: titleCase(a.city || ""), specialty: tx.desc || "" };
-  });
+  let list = (j.results || []).map(nppesRow);
   const city = doc.city.trim().toLowerCase(), spec = doc.specialty.trim().toLowerCase();
   list.forEach(c => { c.score = (city && c.city.toLowerCase() === city ? 2 : 0) + (spec && c.specialty.toLowerCase().includes(spec) ? 1 : 0); });
   list.sort((a, b) => b.score - a.score);
   return list;
+}
+function nppesRow(r){
+  const a = (r.addresses || []).find(x => x.address_purpose === "LOCATION") || (r.addresses || [])[0] || {};
+  const tx = (r.taxonomies || []).find(t => t.primary) || (r.taxonomies || [])[0] || {};
+  return { npi: String(r.number), name: [r.basic.first_name, r.basic.middle_name, r.basic.last_name].filter(Boolean).join(" ") + (r.basic.credential ? ", " + r.basic.credential : ""),
+           first: titleCase(r.basic.first_name || ""), last: titleCase(r.basic.last_name || ""), city: titleCase(a.city || ""), specialty: tx.desc || "" };
+}
+// NPI typed in by hand: one registry read to show who it is (and fill the name if left blank).
+async function nppesByNumber(npi){
+  const j = await getJSON(NPPES + "?" + new URLSearchParams({ version:"2.1", number: npi }));
+  return (j.results || []).map(nppesRow)[0] || null;
 }
 function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, m => m.toUpperCase()); }
 
@@ -381,7 +387,8 @@ function rank(results, docs, carrierList){
         const kept = net.byDoc.map(entries => g.key === "*" ? entries.length > 0 : entries.some(e => normGroup(e.group) === g.key));
         const n = kept.filter(Boolean).length; if (!n) continue;
         const prio = pIdx >= 0 && kept[pIdx];
-        const sameGroup = g.key !== "*";
+        // "No medical group listed" is missing data, not a shared group, so it gets no same-group credit.
+        const sameGroup = g.key !== "*" && g.key !== "";
         options.push({ carrier: c, net, group: g.label, sameGroup, kept, n, prio,
           score: (prio ? 1000 : 0) + n * 10 + (sameGroup || !hmoStrict ? 2 : 0) });
       }
@@ -400,7 +407,7 @@ function rank(results, docs, carrierList){
 // ---------------------------------------------------------------------------
 // UI: doctor rows
 let docs = load("docs", null) || [{ first:"", last:"", city:"", specialty:"Primary care", priority:true, npi:"", picks:null }, { first:"", last:"", city:"", specialty:"", priority:false, npi:"", picks:null }];
-function saveDocs(){ save("docs", docs.map(d => ({ first:d.first, last:d.last, city:d.city, specialty:d.specialty, priority:d.priority, npi:d.npi, picks:d.picks }))); }
+function saveDocs(){ save("docs", docs.map(d => ({ first:d.first, last:d.last, city:d.city, specialty:d.specialty, priority:d.priority, npi:d.npi, npiIn:d.npiIn || "", npiName:d.npiName || "", picks:d.picks }))); }
 function renderDocs(){
   const tb = $("#docs tbody"); tb.innerHTML = "";
   docs.forEach((d, i) => {
@@ -409,17 +416,18 @@ function renderDocs(){
       <td><input type="text" data-f="first" value="${esc(d.first)}" placeholder="First"></td>
       <td><input type="text" data-f="last" value="${esc(d.last)}" placeholder="Last"></td>
       <td><input type="text" data-f="city" value="${esc(d.city)}" placeholder="City"></td>
+      <td><input type="text" data-f="npiIn" value="${esc(d.npiIn || "")}" placeholder="10 digits" inputmode="numeric" maxlength="10" style="width:7.5em"></td>
       <td><input type="text" data-f="specialty" value="${esc(d.specialty)}" placeholder="e.g. Cardiology"><div class="npi"></div></td>
       <td class="del"><button class="btn" title="Remove">&times;</button></td>`;
     tr.querySelector("input[type=radio]").onchange = () => { docs.forEach((x, j) => x.priority = j === i); saveDocs(); };
-    tr.querySelectorAll("input[data-f]").forEach(inp => inp.oninput = () => { d[inp.dataset.f] = inp.value; if (inp.dataset.f !== "specialty") { d.npi = ""; d.picks = null; renderNpi(tr, d); } saveDocs(); });
+    tr.querySelectorAll("input[data-f]").forEach(inp => inp.oninput = () => { d[inp.dataset.f] = inp.value; if (inp.dataset.f !== "specialty") { d.npi = ""; d.npiName = ""; d.picks = null; renderNpi(tr, d); } saveDocs(); });
     tr.querySelector(".del button").onclick = () => { const wasP = d.priority; docs.splice(i, 1); if (wasP && docs[0]) docs[0].priority = true; saveDocs(); renderDocs(); };
     tb.appendChild(tr); renderNpi(tr, d);
   });
 }
 function renderNpi(tr, d){
   const box = tr.querySelector(".npi");
-  if (!d.picks) { box.textContent = d.npi ? "NPI " + d.npi : ""; return; }
+  if (!d.picks) { box.textContent = d.npi ? "NPI " + d.npi + (d.npiName ? " \u00b7 " + d.npiName : "") : ""; return; }
   if (!d.picks.length) { box.innerHTML = '<span class="err">Not found in the NPI registry; carriers will be searched by name.</span>'; return; }
   box.innerHTML = 'Which one? <select>' + d.picks.slice(0, 15).map(p => `<option value="${p.npi}" ${p.npi === d.npi ? "selected" : ""}>${esc(p.name)} &middot; ${esc(p.specialty)} &middot; ${esc(p.city)}</option>`).join("") + '<option value="">None of these (search by name)</option></select>';
   box.querySelector("select").onchange = e => { d.npi = e.target.value; saveDocs(); };
@@ -446,8 +454,11 @@ $("#zip").value = load("zip", "92648"); $("#zip").onchange = () => save("zip", $
 // Run
 function progress(t){ $("#progress").textContent = t; }
 $("#go").onclick = async () => {
-  const active = docs.filter(d => d.last.trim());
-  if (!active.length) { progress("Type at least one doctor's last name."); return; }
+  const typedNpi = d => (d.npiIn || "").trim();
+  const badNpi = docs.find(d => typedNpi(d) && !/^\d{10}$/.test(typedNpi(d)));
+  if (badNpi) { progress("An NPI is 10 digits. Fix or clear the NPI box for " + (docLabel(badNpi) || "that doctor") + "."); return; }
+  const active = docs.filter(d => d.last.trim() || typedNpi(d));
+  if (!active.length) { progress("Type at least one doctor's last name or NPI."); return; }
   if (!active.some(d => d.priority)) active[0].priority = true;
   const list = carriers.filter(c => c.base && picked.includes(c.id));
   $("#go").disabled = true; $("#results").innerHTML = ""; $("#log").innerHTML = ""; $("#logCount").textContent = "0";
@@ -456,6 +467,15 @@ $("#go").onclick = async () => {
     progress("Looking up doctors in the national NPI registry...");
     let needPick = false;
     await Promise.all(active.map(async d => {
+      if (typedNpi(d)) {
+        // NPI given: use it as-is; the registry read only labels the doctor.
+        if (d.npi === typedNpi(d) && d.npiName) return;
+        d.npi = typedNpi(d); d.picks = null;
+        let hit = null; try { hit = await nppesByNumber(d.npi); } catch (e) {}
+        d.npiName = hit ? hit.name + (hit.specialty ? " \u00b7 " + hit.specialty : "") + (hit.city ? " \u00b7 " + hit.city : "") : "not found in the NPI registry";
+        if (hit && !d.last.trim()) { d.first = hit.first; d.last = hit.last; }
+        return;
+      }
       if (d.picks) return;
       try { d.picks = await nppesLookup(d); } catch (e) { d.picks = []; d.npiError = e.message; }
       const top = d.picks[0];
@@ -520,8 +540,13 @@ $("#go").onclick = async () => {
   } finally { $("#go").disabled = false; }
 };
 
-function docLabel(d){ return (d.first ? d.first + " " : "") + d.last + (d.specialty ? " (" + d.specialty + ")" : ""); }
+function docLabel(d){ const n = (d.first ? d.first + " " : "") + d.last || (d.npi || d.npiIn ? "NPI " + (d.npi || d.npiIn) : ""); return n + (n && d.specialty ? " (" + d.specialty + ")" : ""); }
 
+// When doctors are not in one shared group, name each doctor's group(s) so the client can see who they'd switch to.
+function docGroups(net, di){
+  const gs = [...new Set(net.byDoc[di].map(e => e.group).filter(Boolean))];
+  return gs.length ? ` <small style="display:inline;opacity:.85">&middot; ${esc(gs.slice(0, 2).join(", "))}${gs.length > 2 ? " +" + (gs.length - 2) : ""}</small>` : "";
+}
 function render(results, active, list){
   const opts = rank(results, active, list);
   const pi = active.findIndex(d => d.priority);
@@ -538,12 +563,12 @@ function render(results, active, list){
   h += `<div class="best">` + cards.slice(0, 8).map(({ o, names, plans: planNames }, i) => {
     const cls = o.n === active.length && o.prio ? "" : o.prio ? "partial" : "weak";
     const plans = [...new Set(planNames)].slice(0, 6).join("; ");
-    const groupLine = o.group ? `Medical group: <b>${esc(o.group)}</b>` : o.net.ppo ? "PPO network: medical group doesn't matter" : `<span class="err">Doctors are in different medical groups; on an HMO they may not all be usable together</span>`;
+    const groupLine = o.group && !o.sameGroup ? `<span class="err">No medical group listed in the directory; confirm with the carrier</span>` : o.group ? `Medical group: <b>${esc(o.group)}</b>` : o.net.ppo ? "PPO network: medical group doesn't matter" : `<span class="err">Doctors are in different medical groups; on an HMO they may not all be usable together</span>`;
     return `<div class="opt ${cls}"><h3>${i + 1}. ${esc(o.carrier.name)}: ${esc(names[0])}${names.length > 1 ? ` and ${names.length - 1} more network${names.length > 2 ? "s" : ""}` : ""}</h3>
       <div class="meta">${groupLine} &middot; keeps ${o.n} of ${active.length}${o.prio ? "" : ", <b>not</b> the priority doctor"}</div>
       ${names.length > 1 ? `<details><summary>All ${names.length} networks</summary><small>${names.map(esc).join("<br>")}</small></details>` : ""}
       ${plans ? `<small>Plans on this network: ${esc(plans)}</small>` : ""}
-      <div>${active.map((d, di) => `<span class="chip ${o.kept[di] ? "yes" : "no"}">${o.kept[di] ? "&#10003;" : "no match"} ${esc(docLabel(d))}${di === pi ? " &#9733;" : ""}</span>`).join("")}</div></div>`;
+      <div>${active.map((d, di) => `<span class="chip ${o.kept[di] ? "yes" : "no"}">${o.kept[di] ? "&#10003;" : "no match"} ${esc(docLabel(d))}${di === pi ? " &#9733;" : ""}${o.kept[di] && !o.sameGroup ? docGroups(o.net, di) : ""}</span>`).join("")}</div></div>`;
   }).join("") + `</div>`;
 
   h += `<h2>By carrier</h2>`;
@@ -582,7 +607,7 @@ function demoFetch(url){
   const B = arr => Promise.resolve({ resourceType:"Bundle", type:"searchset", entry: arr.map(r => ({ resource: r })) });
   if (u.host === "npiregistry.cms.hhs.gov") {
     const last = (p.get("last_name") || "").toLowerCase();
-    const hits = DEMO_DATA.docs.filter(d => d.last.toLowerCase() === last);
+    const hits = DEMO_DATA.docs.filter(d => p.get("number") ? d.npi === p.get("number") : d.last.toLowerCase() === last);
     return Promise.resolve({ results: hits.map(d => ({ number: d.npi, basic: { first_name: d.first.toUpperCase(), last_name: d.last.toUpperCase(), credential: "MD" },
       addresses: [{ address_purpose: "LOCATION", city: d.city.toUpperCase() }], taxonomies: [{ primary: true, desc: d.spec }] })) });
   }
