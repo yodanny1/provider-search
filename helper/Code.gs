@@ -10,7 +10,8 @@
  * per carrier host named  AUTH_<host>  whose value is JSON, for example:
  *   AUTH_apif1.aetna.com = {"tokenUrl":"https://apif1.aetna.com/fhir/v1/fhirserver_auth/oauth2/token",
  *                           "clientId":"...","clientSecret":"...","scope":"Public NonPII"}
- *   AUTH_some.molina.host = {"header":"Ocp-Apim-Subscription-Key","value":"..."}
+ *   AUTH_adasgateway.alignmenthealth.com = {"header":"Ocp-Apim-Subscription-Key","value":"..."}
+ * A host that needs both a key header and a token can have all of those fields in one value.
  */
 var ALLOWED_HOSTS = [
   'npiregistry.cms.hhs.gov',
@@ -20,7 +21,9 @@ var ALLOWED_HOSTS = [
   'apif1.aetna.com',
   'totalview.healthos.elevancehealth.com',
   'api.interop.molinahealthcare.com',
-  'directory.cms.gov'
+  'directory.cms.gov',
+  'providerdirectory.scanhealthplan.com',
+  'adasgateway.alignmenthealth.com'
 ];
 // Hosts added later go in Script Properties as EXTRA_HOSTS = "host1,host2" so this file needn't change.
 
@@ -49,7 +52,7 @@ function doGet(e) {
 }
 
 function addAuth_(host, cfg, headers) {
-  if (cfg.header) { headers[cfg.header] = cfg.value; return; }
+  if (cfg.header) headers[cfg.header] = cfg.value;
   if (cfg.tokenUrl) {
     var cache = CacheService.getScriptCache(), key = 'tok_' + host, tok = cache.get(key);
     if (!tok) {
