@@ -356,7 +356,8 @@ const STATES = "AL|AK|AZ|AR|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|M
 const OTHER_STATE_RE = new RegExp("\\b(" + STATES + ")-[A-Z]{0,3}\\d|\\b(Alabama|Alaska|Arizona|Arkansas|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|Puerto Rico)\\b", "i");
 const GROUP_PLAN_RE = /\bgroup medicare\b|\bgroup\b.*\bmedicare\b|\bretiree|\bemployer/i;
 function individualCA(name){ return !OTHER_STATE_RE.test(name) && !GROUP_PLAN_RE.test(name); }
-const ACCEPTING_TEXT = { newpt:"Accepting new patients", existptonly:"Existing patients only", existptfam:"Existing patients and family only", nopt:"Not accepting new patients" };
+// Plan-Net codes, the same for every carrier, folded into three answers.
+const ACCEPTING_TEXT = { newpt:"Accepting new patients", existptonly:"Existing patients only", existptfam:"Existing patients only", nopt:"Not accepting new patients" };
 const MEDICARE_RE = /medicare|advantage|\bma\b|\bmapd\b|d-?snp|c-?snp|\bsnp\b|mediadv|65 ?plus|senior/i;
 function looksMedicare(net, plans){ return MEDICARE_RE.test(net) || plans.some(p => MEDICARE_RE.test(p.name + " " + p.type)); }
 function looksPPO(net, plans){ return /\bppo\b|\bpffs\b/i.test(net + " " + plans.map(p => p.name).join(" ")); }
