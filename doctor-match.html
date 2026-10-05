@@ -356,7 +356,7 @@ const STATES = "AL|AK|AZ|AR|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|M
 const OTHER_STATE_RE = new RegExp("\\b(" + STATES + ")-[A-Z]{0,3}\\d|\\b(Alabama|Alaska|Arizona|Arkansas|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|Puerto Rico)\\b", "i");
 const GROUP_PLAN_RE = /\bgroup medicare\b|\bgroup\b.*\bmedicare\b|\bretiree|\bemployer/i;
 function individualCA(name){ return !OTHER_STATE_RE.test(name) && !GROUP_PLAN_RE.test(name); }
-const ACCEPTING_TEXT = { newpt:"accepting new patients", existptonly:"existing patients only", existptfam:"existing patients and family", nopt:"not accepting new patients" };
+const ACCEPTING_TEXT = { newpt:"Accepting new patients", existptonly:"Existing patients only", existptfam:"Existing patients and family only", nopt:"Not accepting new patients" };
 const MEDICARE_RE = /medicare|advantage|\bma\b|\bmapd\b|d-?snp|c-?snp|\bsnp\b|mediadv|65 ?plus|senior/i;
 function looksMedicare(net, plans){ return MEDICARE_RE.test(net) || plans.some(p => MEDICARE_RE.test(p.name + " " + p.type)); }
 function looksPPO(net, plans){ return /\bppo\b|\bpffs\b/i.test(net + " " + plans.map(p => p.name).join(" ")); }
@@ -548,7 +548,7 @@ function render(results, active, list){
     for (const n of nets) {
       h += `<tr><td>${esc(n.name)}${n.plans && n.plans.length ? `<small>${esc(n.plans.map(p => p.name).slice(0, 5).join("; "))}</small>` : ""}</td>` +
         n.byDoc.map(es => es.length
-          ? `<td class="in">${[...new Map(es.map(e => [normGroup(e.group), e])).values()].map(e => `${esc(e.group || "In network, no group listed")}<small>${esc([...new Set(e.cities)].join(", "))}${e.accepting ? " &middot; " + esc(ACCEPTING_TEXT[e.accepting] || e.accepting) : ""}</small>`).join("")}</td>`
+          ? `<td class="in">${[...new Map(es.map(e => [normGroup(e.group), e])).values()].map(e => `${esc(e.group || "In network, no group listed")}<small>${esc([...new Set(e.cities)].join(", "))}</small>${e.accepting ? `<b style="display:block;font-size:13px;color:${e.accepting === "newpt" ? "var(--ok)" : "var(--bad)"}">${e.accepting === "newpt" ? "&#10003; " : "&#10007; "}${esc(ACCEPTING_TEXT[e.accepting] || e.accepting)}</b>` : ""}`).join("")}</td>`
           : `<td class="nm">no match</td>`).join("") + `</tr>`;
     }
     h += `</tbody></table>${r.perDoc.some(x => x === "notfound") ? `<small>"no match" in every row means the doctor isn't in this carrier's directory at all.</small>` : ""}</div>`;
