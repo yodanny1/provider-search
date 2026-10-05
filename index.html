@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medicare101.net Carrier Search</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,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">
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5c6575; --line:#dde1e7; --green:#1e9e4a; --green-dark:#167a39; --warn:#9a5b00; --warn-bg:#fff4e0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2e343e; --green:#2fbf62; --green-dark:#22994d; --warn:#ffc46b; --warn-bg:#3a2c12; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:920px; margin:0 auto; padding:20px 16px 40px; }
+  .brand { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px 16px; border-bottom:3px solid var(--green); padding-bottom:10px; margin-bottom:14px; }
+  .brand .logo { font-size:26px; font-weight:800; letter-spacing:-.3px; color:var(--ink); text-decoration:none; }
+  .brand .logo span { color:var(--green); }
+  .brand .contact { color:var(--muted); font-size:14px; text-align:right; }
+  .brand .contact a { color:inherit; }
+  .brand .me { display:flex; align-items:center; gap:10px; }
+  .brand .me a { display:flex; }
+  .brand .photo { width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid var(--green); flex:none; }
+  .confirmed { margin:-6px 0 12px; color:var(--muted); font-size:13px; }
+  footer { margin-top:22px; text-align:center; color:var(--muted); font-size:13px; }
+  footer a { color:inherit; }
+  h1 { font-size:24px; margin:0 0 2px; outline:none; }
+  h1:focus { box-shadow:0 0 0 2px var(--green); border-radius:4px; }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  .choices { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:640px) { .choices { grid-template-columns:1fr; } th.hide, td.hide { display:none; } }
+  .big { display:block; width:100%; font:inherit; font-size:22px; font-weight:700; color:#fff; background:var(--green); border:none; border-radius:14px; padding:26px 18px; cursor:pointer; box-shadow:0 3px 0 var(--green-dark); text-align:center; text-decoration:none; }
+  .big:hover { filter:brightness(1.06); }
+  .big:active { transform:translateY(2px); box-shadow:0 1px 0 var(--green-dark); }
+  .big small { display:block; font-size:14px; font-weight:400; opacity:.9; margin-top:4px; }
+  .bar { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin:14px 0 0; color:var(--muted); }
+  input[type=text], select { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+  input[type=text] { width:5.5em; text-transform:uppercase; }
+  .note { margin:14px 0 0; padding:10px 12px; border-radius:8px; background:var(--warn-bg); color:var(--warn); }
+  .note[hidden] { display:none; }
+  table { width:100%; border-collapse:collapse; margin-top:18px; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th, td { text-align:left; padding:9px 10px; border-top:1px solid var(--line); vertical-align:top; }
+  th { border-top:none; font-size:13px; color:var(--muted); font-weight:600; }
+  td.name { font-weight:600; }
+  td small { color:var(--muted); display:block; font-weight:400; }
+  td.hint { font-size:13.5px; }
+  .tag { display:inline-block; font-size:12px; padding:1px 7px; border-radius:10px; margin-bottom:3px; }
+  .tag.yes { background:#d8f3e1; color:#14612f; }
+  .tag.no { background:#eceef2; color:#4b5361; }
+  @media (prefers-color-scheme: dark) { .tag.yes { background:#173d26; color:#9be3b5; } .tag.no { background:#2a2f38; color:#b5bcc8; } }
+  button.small { font:inherit; font-size:13px; cursor:pointer; border-radius:7px; border:1px solid var(--line); background:var(--bg); color:var(--ink); padding:4px 10px; }
+  .setup { margin-top:26px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .setup h2 { font-size:16px; margin:0 0 8px; }
+  .setup ol { margin:0; padding-left:20px; }
+  .setup li { margin:4px 0; }
+  .drag { display:inline-block; width:auto; font-size:18px; padding:14px 26px; margin:10px 10px 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header class="brand">
+    <a class="logo" href="https://www.Medicare101.net" target="_blank" rel="noopener">Medicare<span>101</span>.net</a>
+    <div class="me"><a href="https://www.Medicare101.net" target="_blank" rel="noopener" title="Visit Medicare101.net"><img class="photo" alt="Danny Matheus" src="data:image/jpeg;base64,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"></a>
+    <div class="contact">Danny Matheus, Broker &middot; CA License 0B02352<br><a href="mailto:DMIA.help@gmail.com">DMIA.help@gmail.com</a> &middot; <a href="tel:+17142526965">(714) 252-6965</a></div></div>
+  </header>
+  <p class="confirmed" id="confirmed">Links last confirmed: October 4, 2026</p>
+  <h1 id="label" contenteditable="true" spellcheck="false" title="Click to rename">Carrier Search</h1>
+  <p class="sub">Individual Medicare Advantage near 92648 (UCLA uses 90045). Public guest searches, no broker login. Pick how you want to search and every carrier opens in its own tab.</p>
+
+  <div class="choices">
+    <button class="big" data-mode="name">Search by Provider Name<small>Opens every checked carrier's doctor search</small></button>
+    <button class="big" data-mode="group">Search by Medical Group<small>Opens every checked carrier, with tips below for finding the group</small></button>
+  </div>
+
+  <div class="bar">
+    <label>Aetna plan year <select id="year"><option>2026</option><option>2027</option></select></label>
+  </div>
+
+  <div class="note" id="popupNote" hidden>
+    Only one tab opened? Your browser blocked the rest as pop-ups. Click the blocked pop-up icon at the right end of the address bar, choose <b>Always allow pop-ups</b>, then click the green button again. You only need to do this once.
+  </div>
+
+  <table>
+    <thead><tr><th>Include</th><th>Carrier</th><th id="hintHead">After the tab opens (provider name)</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="setup">
+    <h2>Put the green button on your desktop</h2>
+    <ol>
+      <li>Keep this file and the green icon file <b>provider-search-links.ico</b> (Windows) or <b>provider-search-links.png</b> (Mac) together in a folder that will stay put, like Documents.</li>
+      <li>Drag this green button onto your desktop:<br>
+        <a class="big drag" id="dragName" href="#name">PROVIDER SEARCH LINKS</a>
+        <a class="big drag" id="dragGroup" href="#group">MEDICAL GROUP SEARCH</a></li>
+      <li><b>Windows:</b> right-click the new desktop shortcut &gt; Properties &gt; Change Icon &gt; Browse, pick provider-search-links.ico, then OK. Right-click it again &gt; Rename and type PROVIDER SEARCH LINKS.</li>
+      <li><b>Mac:</b> open provider-search-links.png, press Command-A then Command-C. Click the desktop shortcut, press Command-I, click the small icon at the top left of the Info window and press Command-V. Click the name to rename it.</li>
+      <li>Double-click the green icon at the start of a call. Every carrier opens in its own tab.</li>
+    </ol>
+    <p style="color:var(--muted);margin:10px 0 0">Your checkboxes, plan year and title are remembered by your browser. Links come from the carrier research done 2026-10-04. If a carrier lands on the wrong screen, tell Claude in the project and the link will be fixed.</p>
+  </div>
+  <footer>Medicare101.net &middot; Danny Matheus, Broker &middot; CA License 0B02352 &middot; <a href="mailto:DMIA.help@gmail.com">DMIA.help@gmail.com</a> &middot; <a href="tel:+17142526965">(714) 252-6965</a></footer>
+</main>
+
+<script>
+// Edit these if a carrier changes its site. {YEAR} is filled in from the plan year box at the top.
+// groupUrl: a separate page for searching by medical group (none confirmed yet, so every carrier falls back to its main search).
+// groupSearch: true where the carrier's own site says you can search by medical group.
+const CARRIERS = [
+  { id:"ucla", name:"UCLA Health MA", note:"LA County only, ZIP 90045",
+    url:"https://www.uclahealthmedicareadvantage.org/providers/search",
+    nameHint:"Enter 90045 if asked > doctor's name.",
+    groupSearch:false, groupHint:"No group search confirmed. The plan's groups are UCLA Medical Group, Seoul MG, AMG IPA, Healthcare Associates and Altais; search the doctor's name to see which." },
+  { id:"molina", name:"Molina", note:"Molina's own plans: LA, Inland Empire, San Diego (not Orange County)",
+    url:"https://molina.sapphirethreesixtyfive.com/",
+    nameHint:"Enter the client's ZIP or city > Medicare plan if asked > doctor's name.",
+    groupSearch:false, groupHint:"No group search confirmed. Try the group name in the search box; each doctor location lists its medical group/IPA." },
+  { id:"aetna", name:"Aetna Medicare",
+    url:"https://health.aetna.com/ahpublic/medicare-direct?zipCode=92648&planYear={YEAR}",
+    alt:"https://www.aetna.com/medicare/find-provider.html",
+    nameHint:"Choose Individual Medicare plan if asked > plan > doctor's name.",
+    groupSearch:false, groupHint:"No medical group search confirmed. Try the group name in the search box; otherwise search the doctor's name." },
+  { id:"humana", name:"Humana",
+    url:"https://findcare.humana.com/inquiry/v1/search?careType=medical",
+    nameHint:"Search as guest > 92648 > Medicare HMO or PPO > Provider Name tab.",
+    groupSearch:false, groupHint:"No medical group search confirmed. Try typing the group name in the search box; otherwise search the doctor's name." },
+  { id:"uhc", name:"UnitedHealthcare / AARP",
+    url:"https://findcare.guest.uhc.com/guest-plan-selection/browse?deeplink=eyJsYW5ndWFnZSI6ImVuIiwibG9iIjoiTVIiLCJjb3ZlcmFnZVR5cGUiOiJNIiwiZmlwc0NvZGUiOiIwNjA1OSIsInppcENvZGUiOiI5MjY0OCIsInppcCI6IjkyNjQ4IiwibG9jYXRpb24iOiI5MjY0OCJ9",
+    // deeplink is base64 of {"language":"en","lob":"MR","coverageType":"M","fipsCode":"06059","zipCode":"92648","zip":"92648","location":"92648"} ; the zip keys are a guess (UHC publishes none), unknown keys are ignored.
+    alt:"https://findcare.guest.uhc.com/guest-plan-selection/browse?deeplink=eyJsYW5ndWFnZSI6ImVuLVVTIiwibG9iIjoiTVIifQ==",
+    nameHint:"Pick plan > confirm 92648 if asked > doctor's name. UHC usually remembers the location after you enter it once.",
+    groupSearch:false, groupHint:"No medical group search confirmed. Pick plan, then look for a Medical Groups category or type the group name; doctor results show their medical group/IPA." },
+  { id:"blueshield", name:"Blue Shield of CA",
+    url:"https://www.blueshieldca.com/fad/home",
+    nameHint:"Continue as guest > 92648 > plan year and Medicare plan > doctor's name.",
+    groupSearch:true, groupHint:"Continue as guest > 92648 > Medicare plan, then search by Medical Group to see the group's doctors." },
+  { id:"alignment", name:"Alignment Health",
+    url:"https://providersearch.alignmenthealthplan.com/",
+    nameHint:"92648 > plan year and plan > doctor's name.",
+    groupSearch:false, groupHint:"No medical group search confirmed. Try the group name in the search box; otherwise search the doctor's name." },
+  { id:"anthem", name:"Anthem Blue Cross",
+    // Danny's own landing page (2026-10-04), exact. Adding zipCode=92648 made Anthem say "no coverage in your area", so do not add it.
+    url:"https://shop.anthem.com/medicare/quote/view-all-plans-recommended?brand=ABC&state=CA&locale=en_US&role=consumer",
+    alt:"https://www.anthem.com/ca/find-care/",
+    nameHint:"Enter 92648 if asked > plan > doctor's name.",
+    groupSearch:false, groupHint:"No medical group search found. Search the doctor's name; HMO profiles usually list the medical group." },
+  { id:"scan", name:"SCAN",
+    url:"https://www.scanhealthplan.com/helpful-tools/provider-search?state=CA&zipOrAddress=92648&radius=10&path=discover-enroll",
+    nameHint:"Should land near 92648. Pick plan if asked > doctor's name.",
+    groupSearch:false, groupHint:"No medical group search confirmed. Try the group name in the search box; otherwise search the doctor's name." }
+];
+
+function load(k, d){ try { const v = localStorage.getItem("carrierLauncher." + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } }
+function save(k, v){ try { localStorage.setItem("carrierLauncher." + k, JSON.stringify(v)); } catch(e){} }
+
+const yearBox = document.getElementById("year");
+const label = document.getElementById("label");
+yearBox.value = load("year", "2027");
+label.textContent = load("label", "Carrier Search");
+const checked = load("checked", {});
+let mode = "name";
+
+function syncLabel(){
+  const t = label.textContent.trim() || "Carrier Search";
+  document.title = "Medicare101.net " + t;
+}
+label.addEventListener("input", () => { save("label", label.textContent.trim()); syncLabel(); });
+label.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); label.blur(); } });
+const base = location.href.split("#")[0];
+for (const [id, m] of [["dragName","name"],["dragGroup","group"]]) {
+  const a = document.getElementById(id);
+  a.href = base + "#" + m;
+  a.addEventListener("click", e => { e.preventDefault(); mode = m; renderHints(); openAll(); });
+}
+syncLabel();
+
+function urlFor(c){
+  if (mode === "group" && c.groupUrl) return c.groupUrl;
+  return c.url.replace("{YEAR}", yearBox.value);
+}
+
+const tbody = document.getElementById("rows");
+const hintCells = [];
+// The page list shows SCAN first; tabs still open in CARRIERS order (UCLA leftmost, SCAN rightmost).
+for (const c of [...CARRIERS].reverse()) {
+  const tr = document.createElement("tr");
+  tr.innerHTML =
+    '<td><input type="checkbox" aria-label="Include ' + c.name + '"' + (checked[c.id] !== false ? " checked" : "") + '></td>' +
+    '<td class="name">' + c.name + (c.note ? "<small>" + c.note + "</small>" : "") + '</td>' +
+    '<td class="hint"></td>' +
+    '<td><button class="small" type="button">Open</button>' + (c.alt ? '<br><a href="' + c.alt + '" target="_blank" rel="noopener" style="font-size:12px">backup link</a>' : "") + '</td>';
+  tr.querySelector("input").addEventListener("change", e => { checked[c.id] = e.target.checked; save("checked", checked); });
+  tr.querySelector("button").addEventListener("click", () => window.open(urlFor(c), "_blank"));
+  hintCells.push([c, tr.querySelector(".hint")]);
+  tbody.appendChild(tr);
+}
+
+function renderHints(){
+  document.getElementById("hintHead").textContent = "After the tab opens (" + (mode === "group" ? "medical group" : "provider name") + ")";
+  for (const [c, cell] of hintCells) {
+    if (mode === "group") {
+      cell.innerHTML = (c.groupSearch ? '<span class="tag yes">Has medical group search</span>' : '<span class="tag no">No group search, opens provider search</span>') + "<br>" + c.groupHint;
+    } else cell.textContent = c.nameHint;
+  }
+}
+
+function openAll(){
+  let blocked = 0;
+  for (const c of CARRIERS) {
+    if (checked[c.id] === false) continue;
+    if (!window.open(urlFor(c), "_blank")) blocked++;
+  }
+  document.getElementById("popupNote").hidden = blocked === 0;
+}
+
+document.querySelectorAll(".big[data-mode]").forEach(b => b.addEventListener("click", () => {
+  mode = b.dataset.mode; renderHints(); openAll();
+}));
+yearBox.addEventListener("change", () => save("year", yearBox.value));
+// Opened from a desktop shortcut: go straight to that search.
+const start = location.hash.replace("#", "");
+if (start === "name" || start === "group") { mode = start; renderHints(); openAll(); }
+else renderHints();
+</script>
+</body>
+</html>
