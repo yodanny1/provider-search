@@ -98,6 +98,7 @@
     <div class="row carriers" id="carriers"></div>
     <button class="big" id="go">Find matches</button>
     <div id="progress"></div>
+    <details style="margin-top:8px"><summary style="font-weight:400;color:var(--muted);font-size:13px">Activity log (<span id="logCount">0</span>)</summary><div id="log" style="font:12px/1.4 ui-monospace,Consolas,monospace;color:var(--muted);max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-all"></div></details>
   </div>
 
   <section id="results"></section>
@@ -164,17 +165,29 @@ let inflight = 0; const waiters = [];
 async function slot(){ if (inflight < 6) { inflight++; return; } await new Promise(r => waiters.push(r)); inflight++; }
 function release(){ inflight--; const w = waiters.shift(); if (w) w(); }
 
+function logLine(t){
+  const box = $("#log"); if (!box) return;
+  const d = document.createElement("div"); d.textContent = new Date().toLocaleTimeString() + "  " + t; box.appendChild(d);
+  $("#logCount").textContent = box.children.length;
+}
+function shortUrl(url){ try { const u = new URL(url); return u.host + u.pathname.replace(/^\/(api|fhirpublic\/R4)/, "") + (u.search.length > 90 ? u.search.slice(0, 90) + "..." : u.search); } catch (e) { return url; } }
 async function getJSON(url){
   if (DEMO) return demoFetch(url);
   await slot();
+  const t0 = Date.now();
   try {
     const host = new URL(url).host, proxy = $("#proxy").value.trim();
     if (directOK[host] !== false) {
-      try { return await fetchWithTimeout(url, 20000); }
+      try { const j = await fetchWithTimeout(url, 15000); logLine("OK " + ((Date.now() - t0) / 1000).toFixed(1) + "s  " + shortUrl(url)); return j; }
       catch (e) { if (e.httpStatus) throw e; directOK[host] = false; }
     }
     if (!proxy) throw new Error("blocked by the browser; add the helper link in Settings");
-    return await fetchWithTimeout(proxy + (proxy.includes("?") ? "&" : "?") + "url=" + encodeURIComponent(url), 45000, true);
+    const j = await fetchWithTimeout(proxy + (proxy.includes("?") ? "&" : "?") + "url=" + encodeURIComponent(url), 60000, true);
+    logLine("OK " + ((Date.now() - t0) / 1000).toFixed(1) + "s  " + shortUrl(url));
+    return j;
+  } catch (e) {
+    logLine("FAILED " + ((Date.now() - t0) / 1000).toFixed(1) + "s  " + shortUrl(url) + "  (" + e.message + ")");
+    throw e;
   } finally { release(); }
 }
 async function fetchWithTimeout(url, ms, viaProxy){
@@ -253,7 +266,7 @@ async function rolesFor(c, prac){
   all.filter(r => r.resourceType !== "PractitionerRole" && r.id).forEach(r => { cache[c.id + "|" + r.resourceType + "/" + r.id] = Promise.resolve(r); });
   const roles = all.filter(r => r.resourceType === "PractitionerRole" && r.active !== false);
   const out = [];
-  for (const role of roles) {
+  await Promise.all(roles.map(async role => {
     const netRefs = (role.extension || []).filter(x => (x.url || "").endsWith(EXT_NETWORK)).map(x => refId(x.valueReference)).filter(Boolean);
     const orgRef = refId(role.organization);
     const locRefs = (role.location || []).map(refId).filter(Boolean);
@@ -271,7 +284,7 @@ async function rolesFor(c, prac){
                  states: locs.map(l => ((l.address && l.address.state) || "").toUpperCase()).filter(Boolean),
                  specialty, accepting: accepting ? ((accepting.coding || [])[0] || {}).code || accepting.text : "" });
     }
-  }
+  }));
   return out;
 }
 
@@ -293,7 +306,9 @@ async function plansForNetwork(c, netRef){
   if (!planCache[key]) planCache[key] = (async () => {
     try {
       const plans = bundleEntries(await getJSON(c.base.replace(/\/+$/, "") + "/InsurancePlan?network=" + encodeURIComponent(netRef) + "&_count=50"));
-      return plans.filter(p => p.resourceType === "InsurancePlan").map(p => ({ name: p.name || p.alias && p.alias[0] || p.id,
+      const netId = netRef.split("/").pop();
+      const refsNet = p => JSON.stringify([p.network || [], (p.plan || []).map(x => x.network || [])]).includes(netId);
+      return plans.filter(p => p.resourceType === "InsurancePlan" && refsNet(p)).map(p => ({ name: p.name || p.alias && p.alias[0] || p.id,
         type: (p.type || []).map(t => t.text || (t.coding || []).map(cd => cd.display || cd.code).join(" ")).join(" ") }));
     } catch (e) { return []; }
   })();
@@ -370,7 +385,7 @@ function renderNpi(tr, d){
 // UI: carriers + settings
 let picked = load("carriers", null) || carriers.map(c => c.id);
 function renderCarriers(){
-  $("#carriers").innerHTML = carriers.map(c => `<label><input type="checkbox" value="${c.id}" ${picked.includes(c.id) ? "checked" : ""} ${c.base ? "" : "disabled"}> ${esc(c.name)}${c.base ? "" : " <small>(check by hand)</small>"}</label>`).join("");
+  $("#carriers").innerHTML = carriers.map(c => `<label><input type="checkbox" value="${c.id}" ${c.base && picked.includes(c.id) ? "checked" : ""} ${c.base ? "" : "disabled"}> ${esc(c.name)}${c.base ? "" : " <small>(check by hand)</small>"}</label>`).join("");
   $("#carriers").querySelectorAll("input").forEach(i => i.onchange = () => { picked = [...$("#carriers").querySelectorAll("input:checked")].map(x => x.value); save("carriers", picked); });
   $("#endpoints tbody").innerHTML = carriers.map(c => `<tr><td>${esc(c.name)}</td><td><input type="text" data-id="${c.id}" value="${esc(c.base)}" placeholder="not found yet"></td><td><small>${esc(STATUS_TEXT[c.status] || "")}</small></td></tr>`).join("");
   $("#endpoints").querySelectorAll("input").forEach(i => i.onchange = () => {
@@ -392,7 +407,7 @@ $("#go").onclick = async () => {
   if (!active.length) { progress("Type at least one doctor's last name."); return; }
   if (!active.some(d => d.priority)) active[0].priority = true;
   const list = carriers.filter(c => c.base && picked.includes(c.id));
-  $("#go").disabled = true; $("#results").innerHTML = "";
+  $("#go").disabled = true; $("#results").innerHTML = ""; $("#log").innerHTML = ""; $("#logCount").textContent = "0";
   try {
     // 1. NPI registry, so every carrier is searched for the same exact person
     progress("Looking up doctors in the national NPI registry...");
@@ -419,7 +434,9 @@ $("#go").onclick = async () => {
       const r = results[c.id] = { networks: {}, perDoc: [], error: null };
       try {
         for (const [di, d] of active.entries()) {
+          progress(`${c.name}: looking for ${docLabel(d)}...`);
           const pracs = await findPractitioners(c, d);
+          if (pracs.length) progress(`${c.name}: found ${docLabel(d)}, reading network listings...`);
           r.perDoc[di] = pracs.length ? "found" : "notfound";
           for (const p of pracs) {
             for (const role of await rolesFor(c, p)) {
@@ -429,10 +446,13 @@ $("#go").onclick = async () => {
             }
           }
         }
-        for (const net of Object.values(r.networks)) {
-          net.plans = await plansForNetwork(c, net.id);
+        const nets = Object.values(r.networks);
+        progress(`${c.name}: found ${nets.length} networks, reading their plans...`);
+        await Promise.all(nets.map(async net => {
+          // Plan names only matter for Medicare-looking networks; skip the lookup for the rest when filtering.
+          net.plans = ($("#medicareOnly").checked && nets.length > 12 && !MEDICARE_RE.test(net.name)) ? [] : await plansForNetwork(c, net.id);
           net.medicare = looksMedicare(net.name, net.plans); net.ppo = looksPPO(net.name, net.plans);
-        }
+        }));
         if ($("#medicareOnly").checked) {
           const all = Object.values(r.networks); r.hidden = all.filter(n => !n.medicare).length;
           r.networks = Object.fromEntries(all.filter(n => n.medicare).map(n => [n.id, n]));
@@ -511,7 +531,7 @@ function demoFetch(url){
   }
   if (/\/InsurancePlan$/.test(path)) {
     const n = DEMO_DATA.nets.find(x => "Organization/" + x.id === p.get("network"));
-    return B(n ? n.plans.map(name => ({ resourceType:"InsurancePlan", id: name.replace(/\W/g, ""), name, type:[{ text:"Medicare Advantage" }] })) : []);
+    return B(n ? n.plans.map(name => ({ resourceType:"InsurancePlan", id: name.replace(/\W/g, ""), name, type:[{ text:"Medicare Advantage" }], network:[{ reference:"Organization/" + n.id }] })) : []);
   }
   return Promise.resolve(null);
 }
