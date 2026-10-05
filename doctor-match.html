@@ -124,7 +124,10 @@
 // helper; "unknown" = address not found yet.
 // search: launcher link used for the "check by hand" fallback.
 const DEFAULT_CARRIERS = [
-  { id:"scan", name:"SCAN", base:"", status:"unknown",
+  // SCAN's directory (found via its developer portal 2026-10-05) lists no network per doctor, so every listing
+  // is one "all SCAN plans" network; the IPA is what matters. Its retired groups answer HTTP 410, so drop those.
+  { id:"scan", name:"SCAN", base:"https://providerdirectory.scanhealthplan.com", status:"open",
+    wholeNetwork:"SCAN Medicare Advantage (all plans; directory doesn't split by plan)", dropGoneOrgs:true,
     search:"https://www.scanhealthplan.com/helpful-tools/provider-search?state=CA&zipOrAddress=92648&radius=10&path=discover-enroll" },
   { id:"anthem", name:"Anthem Blue Cross", base:"", status:"key",
     search:"https://shop.anthem.com/medicare/quote/view-all-plans-recommended?brand=ABC&state=CA&locale=en_US&role=consumer" },
@@ -286,19 +289,24 @@ async function rolesFor(c, prac){
     const locRefs = (role.location || []).map(refId).filter(Boolean);
     // Use the name the directory already put on the reference; only look the record up when it's missing.
     const org = orgRef && !(role.organization && role.organization.display) ? await getRes(c, orgRef) : null;
+    if (c.dropGoneOrgs && orgRef && !org && !(role.organization && role.organization.display)) return;   // group no longer exists
     if (!netRefs.length && orgRef) netRefs.push(...await networksOfOrg(c, orgRef));
+    if (!netRefs.length && c.wholeNetwork) netRefs.push(c.id + "-all");
     const locs = (await Promise.all(locRefs.slice(0, 4).map(r => getRes(c, r)))).filter(Boolean);
     const newPat = (role.extension || []).find(x => (x.url || "").endsWith(EXT_NEWPAT));
     const accepting = newPat ? ((newPat.extension || []).find(x => x.url === "acceptingPatients") || {}).valueCodeableConcept : null;
+    // Older Plan-Net form (SCAN): a plain true/false "AcceptingPatients" extension.
+    const acceptBool = (role.extension || []).find(x => /AcceptingPatients/i.test(x.url || "") && typeof x.valueBoolean === "boolean");
     const specialty = (role.specialty || []).map(s => s.text || (s.coding || [])[0] && s.coding[0].display).filter(Boolean).join(", ");
     await Promise.all(netRefs.map(async nref => {
-      const shown = ((role.extension || []).find(x => refId(x.valueReference) === nref) || {}).valueReference?.display;
+      const whole = nref === c.id + "-all";
+      const shown = whole ? c.wholeNetwork : ((role.extension || []).find(x => refId(x.valueReference) === nref) || {}).valueReference?.display;
       const net = shown ? null : await getRes(c, nref);
-      out.push({ networkId: nref, networkName: (net && net.name) || ((role.extension || []).find(x => refId(x.valueReference) === nref) || {}).valueReference?.display || nref,
+      out.push({ networkId: nref, networkName: (net && net.name) || shown || ((role.extension || []).find(x => refId(x.valueReference) === nref) || {}).valueReference?.display || nref,
                  group: (role.organization && role.organization.display) || (org && org.name) || "",
                  cities: locs.map(l => titleCase((l.address && l.address.city) || "")).filter(Boolean),
                  states: locs.map(l => ((l.address && l.address.state) || "").toUpperCase()).filter(Boolean),
-                 specialty, accepting: accepting ? ((accepting.coding || [])[0] || {}).code || accepting.text : "" });
+                 specialty, accepting: accepting ? ((accepting.coding || [])[0] || {}).code || accepting.text : acceptBool ? (acceptBool.valueBoolean ? "newpt" : "nopt") : "" });
     }));
   }));
   return out;
@@ -306,7 +314,7 @@ async function rolesFor(c, prac){
 
 // Batch-read records by id (Organization?_id=a,b,c). If a directory rejects big batches, retry smaller
 // ones; if it rejects even small ones, fall back to one-by-one reads.
-const batchSize = { uhc: 10 };   // UnitedHealthcare rejects 40-id lookups (HTTP 400), seen 2026-10-05
+const batchSize = { uhc: 10, scan: 1 };   // UHC rejects 40-id lookups (HTTP 400); SCAN times out on any _id list (2026-10-05)
 async function prefetch(c, refs){
   const base = c.base.replace(/\/+$/, ""), byType = {};
   refs.forEach(r => { const [t, id] = r.split("/"); (byType[t] = byType[t] || []).push(id); });
@@ -345,6 +353,7 @@ async function networksOfOrg(c, orgRef){
 const planCache = {};
 async function plansForNetwork(c, netRef){
   const key = c.id + "|" + netRef;
+  if (netRef === c.id + "-all") return [];   // stand-in network; the directory doesn't tie plans to doctors
   if (!planCache[key]) planCache[key] = (async () => {
     try {
       const plans = bundleEntries(await getJSON(c.base.replace(/\/+$/, "") + "/InsurancePlan?network=" + encodeURIComponent(netRef) + "&_count=50"));
