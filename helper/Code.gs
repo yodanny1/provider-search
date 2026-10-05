@@ -20,7 +20,6 @@ var ALLOWED_HOSTS = [
   'public.fhir.flex.optum.com',
   'apif1.aetna.com',
   'totalview.healthos.elevancehealth.com',
-  'prod.totalview.healthos.elevancehealth.com',
   'api.interop.molinahealthcare.com',
   'directory.cms.gov',
   'providerdirectory.scanhealthplan.com',
@@ -101,6 +100,6 @@ function testHelper() {
 // Run this from the editor (Run > testAnthem) to check the Anthem key: it logs whether a token came back
 // and the start of a doctor search, without the page.
 function testAnthem() {
-  var out = doGet({ parameter: { url: 'https://prod.totalview.healthos.elevancehealth.com/resources/unregistered/api/v1/fhir/cms_mandate/mcd/Practitioner?family=Nguyen&given=Vinh&_count=3' } });
+  var out = doGet({ parameter: { url: 'https://totalview.healthos.elevancehealth.com/resources/unregistered/api/v1/fhir/cms_mandate/mcd/Practitioner?family=Nguyen&given=Vinh&_count=3' } });
   Logger.log(out.getContent().slice(0, 1500));
 }
