@@ -65,26 +65,41 @@ function addAuth_(host, cfg, headers) {
 }
 
 // Carriers differ in how they want the client id and secret sent, so try the usual ways in turn
-// (Basic header, form fields, JSON body) and keep the first that hands back a token.
-function fetchToken_(cfg) {
+// and keep the first that hands back a token. The working way is remembered for 6 hours.
+function tokenTries_(cfg) {
   var form = { grant_type: 'client_credentials' };
   if (cfg.scope) form.scope = cfg.scope;
   var both = { grant_type: 'client_credentials', client_id: cfg.clientId, client_secret: cfg.clientSecret };
   if (cfg.scope) both.scope = cfg.scope;
-  var tries = [
-    { method: 'post', headers: { Authorization: 'Basic ' + Utilities.base64Encode(cfg.clientId + ':' + cfg.clientSecret) }, payload: form },
-    { method: 'post', payload: both },
-    { method: 'post', contentType: 'application/json', payload: JSON.stringify(both) }
+  var basic = 'Basic ' + Utilities.base64Encode(cfg.clientId + ':' + cfg.clientSecret);
+  return [
+    { name: 'basic header', method: 'post', headers: { Authorization: basic }, payload: form },
+    { name: 'form fields', method: 'post', payload: both },
+    { name: 'JSON body', method: 'post', contentType: 'application/json', payload: JSON.stringify(both) },
+    { name: 'id/secret headers', method: 'post', headers: { client_id: cfg.clientId, client_secret: cfg.clientSecret }, payload: form },
+    { name: 'secret as bearer', method: 'post', headers: { Authorization: 'Bearer ' + cfg.clientSecret }, payload: { grant_type: 'client_credentials', client_id: cfg.clientId } },
+    { name: 'secret as bearer, GET', method: 'get', headers: { Authorization: 'Bearer ' + cfg.clientSecret, client_id: cfg.clientId } }
   ];
-  var seen = [];
+}
+
+function fetchToken_(cfg) {
+  var tries = tokenTries_(cfg), seen = [], cache = CacheService.getScriptCache();
+  var last = Number(cache.get('tokway_' + cfg.tokenUrl));
+  if (last >= 0 && last < tries.length) tries.unshift(tries.splice(last, 1)[0]);
   for (var i = 0; i < tries.length; i++) {
-    tries[i].muteHttpExceptions = true;
-    tries[i].headers = tries[i].headers || {};
-    tries[i].headers.Accept = 'application/json';
-    var r = UrlFetchApp.fetch(cfg.tokenUrl, tries[i]), text = r.getContentText(), j = null;
+    var t = tries[i], name = t.name;
+    delete t.name;
+    t.muteHttpExceptions = true;
+    t.headers = t.headers || {};
+    t.headers.Accept = 'application/json';
+    var r = UrlFetchApp.fetch(cfg.tokenUrl, t), text = r.getContentText(), j = null;
     try { j = JSON.parse(text); } catch (e) {}
-    if (j && j.access_token) return j;
-    seen.push('try ' + (i + 1) + ': HTTP ' + r.getResponseCode() + (text ? ' ' + text.slice(0, 120).replace(/\s+/g, ' ') : ' (empty answer)'));
+    var tok = j && (j.access_token || j.accessToken || j.token);
+    if (tok) {
+      tokenTries_(cfg).forEach(function (x, k) { if (x.name === name) cache.put('tokway_' + cfg.tokenUrl, String(k), 21600); });
+      return { access_token: tok, expires_in: j.expires_in || j.expiresIn };
+    }
+    seen.push(name + ': HTTP ' + r.getResponseCode() + (text ? ' ' + text.slice(0, 120).replace(/\s+/g, ' ') : ' (empty answer)'));
   }
   throw new Error('no token. ' + seen.join('; '));
 }
@@ -98,8 +113,21 @@ function testHelper() {
 }
 
 // Run this from the editor (Run > testAnthem) to check the Anthem key: it logs whether a token came back
-// and the start of a doctor search, without the page.
+// and the start of a doctor search, without the page. If no token comes back it also tries the directory
+// with the secret itself as the key, and says which of those worked.
 function testAnthem() {
-  var out = doGet({ parameter: { url: 'https://totalview.healthos.elevancehealth.com/resources/unregistered/api/v1/fhir/cms_mandate/mcd/Practitioner?family=Nguyen&given=Vinh&_count=3' } });
-  Logger.log(out.getContent().slice(0, 1500));
+  var host = 'totalview.healthos.elevancehealth.com';
+  var url = 'https://' + host + '/resources/unregistered/api/v1/fhir/cms_mandate/mcd/Practitioner?family=Nguyen&given=Vinh&_count=3';
+  CacheService.getScriptCache().remove('tok_' + host);
+  Logger.log('Through the helper: ' + doGet({ parameter: { url: url } }).getContent().slice(0, 900));
+  var cfg = JSON.parse(PropertiesService.getScriptProperties().getProperty('AUTH_' + host) || '{}');
+  if (!cfg.clientSecret) return Logger.log('No AUTH_' + host + ' setting found.');
+  [['secret as bearer', { Authorization: 'Bearer ' + cfg.clientSecret }],
+   ['secret as bearer + client_id', { Authorization: 'Bearer ' + cfg.clientSecret, client_id: cfg.clientId }],
+   ['id/secret headers', { client_id: cfg.clientId, client_secret: cfg.clientSecret }],
+   ['apikey header', { apikey: cfg.clientSecret }]].forEach(function (w) {
+    w[1].Accept = 'application/fhir+json';
+    var r = UrlFetchApp.fetch(url, { headers: w[1], muteHttpExceptions: true });
+    Logger.log('Directory with ' + w[0] + ': HTTP ' + r.getResponseCode() + ' ' + r.getContentText().slice(0, 200).replace(/\s+/g, ' '));
+  });
 }
