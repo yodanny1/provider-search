@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doctor Network Match</title>
+<link rel="icon" type="image/png" href="provider-search-links.png">
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5c6575; --line:#dde1e7; --green:#1e9e4a; --green-dark:#167a39; --warn:#9a5b00; --warn-bg:#fff4e0; --bad:#a3222b; --bad-bg:#fde8ea; --ok-bg:#d8f3e1; --ok:#14612f; --soft:#eceef2; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2e343e; --green:#2fbf62; --green-dark:#22994d; --warn:#ffc46b; --warn-bg:#3a2c12; --bad:#ff9aa2; --bad-bg:#3d1b1f; --ok-bg:#173d26; --ok:#9be3b5; --soft:#2a2f38; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:20px 16px 40px; }
+  .brand { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px 16px; border-bottom:3px solid var(--green); padding-bottom:10px; margin-bottom:14px; }
+  .brand .logo { font-size:26px; font-weight:800; letter-spacing:-.3px; color:var(--ink); text-decoration:none; }
+  .brand .logo span { color:var(--green); }
+  .brand .me { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:14px; }
+  .brand .me a { color:inherit; }
+  .brand .photo { width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid var(--green); }
+  nav.tabs { margin:-4px 0 14px; font-size:14px; }
+  nav.tabs a { color:var(--green); }
+  h1 { font-size:24px; margin:0 0 2px; }
+  h2 { font-size:18px; margin:22px 0 8px; }
+  .sub { color:var(--muted); margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-top:14px; }
+  input[type=text], select { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); width:100%; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:7px 8px; border-top:1px solid var(--line); vertical-align:top; }
+  th { border-top:none; font-size:13px; color:var(--muted); font-weight:600; }
+  #docs td { padding:5px 4px; }
+  #docs td.pick { width:62px; text-align:center; }
+  #docs td.del { width:34px; }
+  .npi { font-size:12.5px; color:var(--muted); margin-top:3px; }
+  .npi select { font-size:12.5px; padding:3px 4px; }
+  .btn { font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); padding:6px 12px; }
+  .big { display:block; width:100%; font:inherit; font-size:21px; font-weight:700; color:#fff; background:var(--green); border:none; border-radius:14px; padding:20px 18px; cursor:pointer; box-shadow:0 3px 0 var(--green-dark); margin-top:14px; }
+  .big:disabled { opacity:.6; cursor:wait; }
+  .row { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; }
+  .row label { display:flex; align-items:center; gap:6px; }
+  .carriers label { min-width:170px; }
+  .carriers small { color:var(--muted); }
+  .note { padding:10px 12px; border-radius:8px; background:var(--warn-bg); color:var(--warn); margin-top:12px; }
+  .sample { padding:8px 12px; border-radius:8px; background:var(--bad-bg); color:var(--bad); font-weight:700; margin-top:12px; }
+  #progress { color:var(--muted); font-size:14px; margin-top:8px; white-space:pre-line; }
+  .best { display:grid; gap:10px; }
+  .opt { border:1px solid var(--line); border-left:6px solid var(--green); border-radius:10px; padding:10px 14px; background:var(--card); }
+  .opt.partial { border-left-color:#d49b00; }
+  .opt.weak { border-left-color:var(--line); }
+  .opt h3 { margin:0 0 4px; font-size:16.5px; }
+  .opt .meta { color:var(--muted); font-size:13.5px; }
+  .chip { display:inline-block; font-size:13px; padding:2px 8px; border-radius:12px; margin:3px 4px 0 0; }
+  .chip.yes { background:var(--ok-bg); color:var(--ok); }
+  .chip.no { background:var(--bad-bg); color:var(--bad); }
+  .matrix { overflow-x:auto; }
+  .matrix table { background:var(--card); border:1px solid var(--line); border-radius:10px; min-width:640px; }
+  .matrix td.nm { color:var(--bad); font-weight:600; }
+  .matrix td.in { background:var(--ok-bg); color:var(--ok); }
+  .matrix td small, .opt small { display:block; color:var(--muted); font-weight:400; }
+  .err { color:var(--bad); }
+  details summary { cursor:pointer; font-weight:600; }
+  .settings input[type=text] { font-size:13px; }
+  footer { margin-top:22px; text-align:center; color:var(--muted); font-size:13px; }
+  footer a { color:inherit; }
+  @media (max-width:700px) { #docs thead { display:none; } #docs tr { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:6px 0; border-top:1px solid var(--line); } #docs td { border:none; } #docs td.pick, #docs td.del { width:auto; text-align:left; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="brand">
+    <a class="logo" href="https://www.Medicare101.net" target="_blank" rel="noopener">Medicare<span>101</span>.net</a>
+    <div class="me"><span>Danny Matheus, Broker &middot; CA License 0B02352<br><a href="mailto:DMIA.help@gmail.com">DMIA.help@gmail.com</a> &middot; <a href="tel:+17142526965">(714) 252-6965</a></span>
+      <a href="https://www.Medicare101.net" target="_blank" rel="noopener"><img class="photo" alt="Danny Matheus" src="danny.jpg"></a></div>
+  </header>
+  <nav class="tabs"><a href="./">Carrier search tabs</a> &middot; <b>Doctor network match</b></nav>
+
+  <h1>Doctor Network Match</h1>
+  <p class="sub">Type the client's doctors, mark the one they care about most, and see which carrier, plan network and medical group keeps the most of them. Data comes from each carrier's public provider directory (the one Medicare requires them to publish), not the broker portals.</p>
+  <div id="sampleBanner" class="sample" hidden>SAMPLE DATA: these doctors, groups and plans are made up, to show how results look. Remove <code>?demo=1</code> from the address for real searches.</div>
+
+  <div class="card">
+    <div class="row">
+      <label>Client ZIP <input type="text" id="zip" style="width:6em" value="92648"></label>
+      <label><input type="checkbox" id="medicareOnly" checked> Medicare networks only</label>
+    </div>
+    <h2 style="margin-top:14px">Doctors</h2>
+    <table id="docs">
+      <thead><tr><th>Priority</th><th>First name</th><th>Last name</th><th>City</th><th>Specialty (optional)</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="addDoc">+ Add doctor</button>
+      <button class="btn" id="clearDocs">Clear all</button>
+      <span style="color:var(--muted);font-size:13px">Priority = the doctor the client most wants to keep (usually the primary care doctor).</span>
+    </div>
+    <h2>Carriers</h2>
+    <div class="row carriers" id="carriers"></div>
+    <button class="big" id="go">Find matches</button>
+    <div id="progress"></div>
+  </div>
+
+  <section id="results"></section>
+
+  <details class="card settings" id="settingsBox">
+    <summary>Settings (helper link and carrier directory addresses)</summary>
+    <p style="color:var(--muted);font-size:13.5px">Most carrier directories, and the national NPI registry, refuse calls straight from a web page. The <b>helper</b> is a small free Google Apps Script in your own Google account that passes the calls along (and holds the developer keys for Aetna and Anthem). Paste its web app link here. Setup steps: <a href="https://github.com/yodanny1/provider-search/blob/main/helper/SETUP.md" target="_blank" rel="noopener">helper/SETUP.md</a>.</p>
+    <label>Helper link <input type="text" id="proxy" placeholder="https://script.google.com/macros/s/.../exec"></label>
+    <table style="margin-top:10px" id="endpoints"><thead><tr><th>Carrier</th><th>Directory address (FHIR base)</th><th>Status</th></tr></thead><tbody></tbody></table>
+    <p><button class="btn" id="resetEndpoints">Reset addresses to defaults</button></p>
+  </details>
+
+  <footer>Medicare101.net &middot; Danny Matheus, Broker &middot; CA License 0B02352 &middot; Directory data can lag the carrier's website by up to 30 days. Confirm the final pick on the carrier's own search before enrolling.</footer>
+</main>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Carrier directory addresses. Every Medicare Advantage carrier must publish a
+// public FHIR provider directory (CMS-9115-F, Da Vinci PDex Plan-Net format).
+// status: "open" = confirmed reachable without a key; "documented" = carrier says
+// it is public but not yet tested; "key" = needs a free developer key held by the
+// helper; "unknown" = address not found yet.
+// search: launcher link used for the "check by hand" fallback.
+const DEFAULT_CARRIERS = [
+  { id:"scan", name:"SCAN", base:"", status:"unknown",
+    search:"https://www.scanhealthplan.com/helpful-tools/provider-search?state=CA&zipOrAddress=92648&radius=10&path=discover-enroll" },
+  { id:"anthem", name:"Anthem Blue Cross", base:"", status:"key",
+    search:"https://shop.anthem.com/medicare/quote/view-all-plans-recommended?brand=ABC&state=CA&locale=en_US&role=consumer" },
+  { id:"alignment", name:"Alignment Health", base:"", status:"key",
+    search:"https://providersearch.alignmenthealthplan.com/" },
+  { id:"blueshield", name:"Blue Shield of CA", base:"", status:"unknown",
+    search:"https://www.blueshieldca.com/fad/home" },
+  { id:"uhc", name:"UnitedHealthcare", base:"https://flex.optum.com/fhirpublic/R4", status:"documented",
+    search:"https://findcare.guest.uhc.com/guest-plan-selection/browse?deeplink=eyJsYW5ndWFnZSI6ImVuLVVTIiwibG9iIjoiTVIifQ==" },
+  { id:"humana", name:"Humana", base:"https://fhir.humana.com/api", status:"open",
+    search:"https://findcare.humana.com/inquiry/v1/search?careType=medical" },
+  { id:"aetna", name:"Aetna Medicare", base:"", status:"key",
+    search:"https://www.aetna.com/medicare/find-provider.html" },
+  { id:"molina", name:"Molina", base:"", status:"key",
+    search:"https://molina.sapphirethreesixtyfive.com/" },
+  { id:"ucla", name:"UCLA Health MA", base:"", status:"unknown",
+    search:"https://www.uclahealthmedicareadvantage.org/providers/search" },
+];
+const STATUS_TEXT = { open:"Works, no key", documented:"Public per carrier, untested", key:"Needs free developer key in helper", unknown:"Address not found yet" };
+const NPPES = "https://npiregistry.cms.hhs.gov/api/";
+const NPI_SYSTEM = "http://hl7.org/fhir/sid/us-npi";
+const EXT_NETWORK = "network-reference";       // Plan-Net extension on PractitionerRole
+const EXT_NEWPAT = "newpatients";               // Plan-Net accepting-new-patients extension
+
+// ---------------------------------------------------------------------------
+// Storage
+function load(k, d){ try { const v = localStorage.getItem("doctorMatch." + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } }
+function save(k, v){ try { localStorage.setItem("doctorMatch." + k, JSON.stringify(v)); } catch(e){} }
+const DEMO = new URLSearchParams(location.search).has("demo");
+let carriers = DEFAULT_CARRIERS.map(c => Object.assign({}, c, (load("endpoints", {})[c.id] || {})));
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
+
+// ---------------------------------------------------------------------------
+// Network layer: try the directory directly, fall back to the helper.
+const directOK = {};   // host -> false once a direct call has failed
+let inflight = 0; const waiters = [];
+async function slot(){ if (inflight < 6) { inflight++; return; } await new Promise(r => waiters.push(r)); inflight++; }
+function release(){ inflight--; const w = waiters.shift(); if (w) w(); }
+
+async function getJSON(url){
+  if (DEMO) return demoFetch(url);
+  await slot();
+  try {
+    const host = new URL(url).host, proxy = $("#proxy").value.trim();
+    if (directOK[host] !== false) {
+      try { return await fetchWithTimeout(url, 20000); }
+      catch (e) { if (e.httpStatus) throw e; directOK[host] = false; }
+    }
+    if (!proxy) throw new Error("blocked by the browser; add the helper link in Settings");
+    return await fetchWithTimeout(proxy + (proxy.includes("?") ? "&" : "?") + "url=" + encodeURIComponent(url), 45000, true);
+  } finally { release(); }
+}
+async function fetchWithTimeout(url, ms, viaProxy){
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctl.signal });
+    if (!r.ok) { const e = new Error("HTTP " + r.status); e.httpStatus = r.status; throw e; }
+    const j = await r.json();
+    if (viaProxy && j && j.helperError) { const e = new Error(j.helperError); e.httpStatus = j.status || 502; throw e; }
+    return j;
+  } catch (e) { if (e.name === "AbortError") { const x = new Error("timed out"); x.httpStatus = 408; throw x; } throw e; }
+  finally { clearTimeout(t); }
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: NPI registry lookup, to pin down the exact doctor.
+async function nppesLookup(doc){
+  const p = new URLSearchParams({ version:"2.1", first_name:doc.first.trim(), last_name:doc.last.trim(), state:"CA", limit:"50", enumeration_type:"NPI-1" });
+  if (!doc.first.trim()) p.delete("first_name");
+  let j = await getJSON(NPPES + "?" + p);
+  let list = (j.results || []).map(r => {
+    const a = (r.addresses || []).find(x => x.address_purpose === "LOCATION") || (r.addresses || [])[0] || {};
+    const tx = (r.taxonomies || []).find(t => t.primary) || (r.taxonomies || [])[0] || {};
+    return { npi: String(r.number), name: [r.basic.first_name, r.basic.middle_name, r.basic.last_name].filter(Boolean).join(" ") + (r.basic.credential ? ", " + r.basic.credential : ""),
+             city: titleCase(a.city || ""), specialty: tx.desc || "" };
+  });
+  const city = doc.city.trim().toLowerCase(), spec = doc.specialty.trim().toLowerCase();
+  list.forEach(c => { c.score = (city && c.city.toLowerCase() === city ? 2 : 0) + (spec && c.specialty.toLowerCase().includes(spec) ? 1 : 0); });
+  list.sort((a, b) => b.score - a.score);
+  return list;
+}
+function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, m => m.toUpperCase()); }
+
+// ---------------------------------------------------------------------------
+// Step 2: per carrier, find the doctor and every network + medical group they are listed under.
+function bundleEntries(b){ return (b && b.entry || []).map(e => e.resource).filter(Boolean); }
+function refId(ref){ return ref && ref.reference ? ref.reference.replace(/^.*?([A-Za-z]+\/[^/]+)$/, "$1") : null; }
+function nextLink(b){ const l = (b.link || []).find(x => x.relation === "next"); return l ? l.url : null; }
+
+async function searchAll(url, maxPages){
+  const out = []; let page = 0;
+  while (url && page < maxPages) { const b = await getJSON(url); out.push(...bundleEntries(b)); url = nextLink(b); page++; }
+  return out;
+}
+
+async function findPractitioners(c, doc){
+  const base = c.base.replace(/\/+$/, "");
+  if (doc.npi) {
+    for (const q of [NPI_SYSTEM + "|" + doc.npi, doc.npi]) {
+      try {
+        const res = bundleEntries(await getJSON(base + "/Practitioner?identifier=" + encodeURIComponent(q) + "&_count=10"))
+          .filter(r => r.resourceType === "Practitioner" && (r.identifier || []).some(i => String(i.value) === doc.npi));
+        if (res.length) return res;
+      } catch (e) { if (e.httpStatus && e.httpStatus !== 400) throw e; }
+    }
+    return [];
+  }
+  // No NPI: name search, keep only exact last-name (and first-name, when given) matches.
+  const res = bundleEntries(await getJSON(base + "/Practitioner?family=" + encodeURIComponent(doc.last.trim()) + (doc.first.trim() ? "&given=" + encodeURIComponent(doc.first.trim()) : "") + "&_count=20"));
+  const L = doc.last.trim().toLowerCase(), F = doc.first.trim().toLowerCase();
+  return res.filter(r => r.resourceType === "Practitioner" && (r.name || []).some(n => (n.family || "").toLowerCase() === L && (!F || (n.given || []).some(g => g.toLowerCase().startsWith(F))))).slice(0, 5);
+}
+
+const cache = {};
+async function getRes(c, ref){
+  const key = c.id + "|" + ref;
+  if (!cache[key]) cache[key] = getJSON(c.base.replace(/\/+$/, "") + "/" + ref).catch(() => null);
+  return cache[key];
+}
+
+async function rolesFor(c, prac){
+  const base = c.base.replace(/\/+$/, "");
+  const url = base + "/PractitionerRole?practitioner=Practitioner/" + encodeURIComponent(prac.id) +
+    "&_include=PractitionerRole:organization&_include=PractitionerRole:network&_include=PractitionerRole:location&_count=100";
+  const all = await searchAll(url, 5);
+  all.filter(r => r.resourceType !== "PractitionerRole" && r.id).forEach(r => { cache[c.id + "|" + r.resourceType + "/" + r.id] = Promise.resolve(r); });
+  const roles = all.filter(r => r.resourceType === "PractitionerRole" && r.active !== false);
+  const out = [];
+  for (const role of roles) {
+    const netRefs = (role.extension || []).filter(x => (x.url || "").endsWith(EXT_NETWORK)).map(x => refId(x.valueReference)).filter(Boolean);
+    const orgRef = refId(role.organization);
+    const locRefs = (role.location || []).map(refId).filter(Boolean);
+    const org = orgRef ? await getRes(c, orgRef) : null;
+    if (!netRefs.length && orgRef) netRefs.push(...await networksOfOrg(c, orgRef));
+    const locs = (await Promise.all(locRefs.slice(0, 4).map(r => getRes(c, r)))).filter(Boolean);
+    const newPat = (role.extension || []).find(x => (x.url || "").endsWith(EXT_NEWPAT));
+    const accepting = newPat ? ((newPat.extension || []).find(x => x.url === "acceptingPatients") || {}).valueCodeableConcept : null;
+    const specialty = (role.specialty || []).map(s => s.text || (s.coding || [])[0] && s.coding[0].display).filter(Boolean).join(", ");
+    for (const nref of netRefs) {
+      const net = await getRes(c, nref);
+      out.push({ networkId: nref, networkName: (net && net.name) || ((role.extension || []).find(x => refId(x.valueReference) === nref) || {}).valueReference?.display || nref,
+                 group: org ? (org.name || "") : (role.organization && role.organization.display) || "",
+                 cities: locs.map(l => titleCase((l.address && l.address.city) || "")).filter(Boolean),
+                 states: locs.map(l => ((l.address && l.address.state) || "").toUpperCase()).filter(Boolean),
+                 specialty, accepting: accepting ? ((accepting.coding || [])[0] || {}).code || accepting.text : "" });
+    }
+  }
+  return out;
+}
+
+const orgNetCache = {};
+async function networksOfOrg(c, orgRef){
+  const key = c.id + "|" + orgRef;
+  if (!orgNetCache[key]) orgNetCache[key] = (async () => {
+    try {
+      const affs = await searchAll(c.base.replace(/\/+$/, "") + "/OrganizationAffiliation?participating-organization=" + encodeURIComponent(orgRef) + "&_count=100", 3);
+      return [...new Set(affs.filter(a => a.resourceType === "OrganizationAffiliation").flatMap(a => (a.network || []).map(refId)).filter(Boolean))];
+    } catch (e) { return []; }
+  })();
+  return orgNetCache[key];
+}
+
+const planCache = {};
+async function plansForNetwork(c, netRef){
+  const key = c.id + "|" + netRef;
+  if (!planCache[key]) planCache[key] = (async () => {
+    try {
+      const plans = bundleEntries(await getJSON(c.base.replace(/\/+$/, "") + "/InsurancePlan?network=" + encodeURIComponent(netRef) + "&_count=50"));
+      return plans.filter(p => p.resourceType === "InsurancePlan").map(p => ({ name: p.name || p.alias && p.alias[0] || p.id,
+        type: (p.type || []).map(t => t.text || (t.coding || []).map(cd => cd.display || cd.code).join(" ")).join(" ") }));
+    } catch (e) { return []; }
+  })();
+  return planCache[key];
+}
+
+const MEDICARE_RE = /medicare|advantage|\bma\b|\bmapd\b|d-?snp|c-?snp|\bsnp\b|mediadv|65 ?plus|senior/i;
+function looksMedicare(net, plans){ return MEDICARE_RE.test(net) || plans.some(p => MEDICARE_RE.test(p.name + " " + p.type)); }
+function looksPPO(net, plans){ return /\bppo\b|\bpffs\b/i.test(net + " " + plans.map(p => p.name).join(" ")); }
+function normGroup(g){ return (g || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\b(inc|llc|pc|a medical corporation|medical corp|corporation)\b/g, "").trim(); }
+
+// ---------------------------------------------------------------------------
+// Step 3: line the doctors up and rank carrier / network / medical group options.
+function rank(results, docs, carrierList){
+  const pIdx = docs.findIndex(d => d.priority);
+  const options = [];
+  for (const c of carrierList) {
+    const r = results[c.id]; if (!r || r.error) continue;
+    for (const net of Object.values(r.networks)) {
+      const hmoStrict = !net.ppo;
+      const groups = new Map();
+      net.byDoc.forEach((entries, di) => entries.forEach(e => { const k = normGroup(e.group); if (!groups.has(k)) groups.set(k, e.group || "(no medical group listed)"); }));
+      // PPO: any in-network doctor works, so only the "all groups" option matters.
+      const combos = hmoStrict ? [...groups.entries()].map(([k, label]) => ({ key: k, label })) : [];
+      combos.push({ key: "*", label: null });
+      for (const g of combos) {
+        const kept = net.byDoc.map(entries => g.key === "*" ? entries.length > 0 : entries.some(e => normGroup(e.group) === g.key));
+        const n = kept.filter(Boolean).length; if (!n) continue;
+        const prio = pIdx >= 0 && kept[pIdx];
+        const sameGroup = g.key !== "*";
+        options.push({ carrier: c, net, group: g.label, sameGroup, kept, n, prio,
+          score: (prio ? 1000 : 0) + n * 10 + (sameGroup || !hmoStrict ? 2 : 0) });
+      }
+    }
+  }
+  options.sort((a, b) => b.score - a.score || a.carrier.name.localeCompare(b.carrier.name));
+  // drop options whose doctors are already all kept by a better option on the same carrier + network
+  const out = [];
+  for (const o of options) {
+    if (out.some(b => b.carrier === o.carrier && b.net === o.net && (b.sameGroup || b.net.ppo || !o.sameGroup) && o.kept.every((k, i) => !k || b.kept[i]))) continue;
+    out.push(o);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// UI: doctor rows
+let docs = load("docs", null) || [{ first:"", last:"", city:"", specialty:"Primary care", priority:true, npi:"", picks:null }, { first:"", last:"", city:"", specialty:"", priority:false, npi:"", picks:null }];
+function saveDocs(){ save("docs", docs.map(d => ({ first:d.first, last:d.last, city:d.city, specialty:d.specialty, priority:d.priority, npi:d.npi, picks:d.picks }))); }
+function renderDocs(){
+  const tb = $("#docs tbody"); tb.innerHTML = "";
+  docs.forEach((d, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="pick"><input type="radio" name="prio" ${d.priority ? "checked" : ""} aria-label="Priority doctor"></td>
+      <td><input type="text" data-f="first" value="${esc(d.first)}" placeholder="First"></td>
+      <td><input type="text" data-f="last" value="${esc(d.last)}" placeholder="Last"></td>
+      <td><input type="text" data-f="city" value="${esc(d.city)}" placeholder="City"></td>
+      <td><input type="text" data-f="specialty" value="${esc(d.specialty)}" placeholder="e.g. Cardiology"><div class="npi"></div></td>
+      <td class="del"><button class="btn" title="Remove">&times;</button></td>`;
+    tr.querySelector("input[type=radio]").onchange = () => { docs.forEach((x, j) => x.priority = j === i); saveDocs(); };
+    tr.querySelectorAll("input[data-f]").forEach(inp => inp.oninput = () => { d[inp.dataset.f] = inp.value; if (inp.dataset.f !== "specialty") { d.npi = ""; d.picks = null; renderNpi(tr, d); } saveDocs(); });
+    tr.querySelector(".del button").onclick = () => { const wasP = d.priority; docs.splice(i, 1); if (wasP && docs[0]) docs[0].priority = true; saveDocs(); renderDocs(); };
+    tb.appendChild(tr); renderNpi(tr, d);
+  });
+}
+function renderNpi(tr, d){
+  const box = tr.querySelector(".npi");
+  if (!d.picks) { box.textContent = d.npi ? "NPI " + d.npi : ""; return; }
+  if (!d.picks.length) { box.innerHTML = '<span class="err">Not found in the NPI registry; carriers will be searched by name.</span>'; return; }
+  box.innerHTML = 'Which one? <select>' + d.picks.slice(0, 15).map(p => `<option value="${p.npi}" ${p.npi === d.npi ? "selected" : ""}>${esc(p.name)} &middot; ${esc(p.specialty)} &middot; ${esc(p.city)}</option>`).join("") + '<option value="">None of these (search by name)</option></select>';
+  box.querySelector("select").onchange = e => { d.npi = e.target.value; saveDocs(); };
+}
+
+// UI: carriers + settings
+let picked = load("carriers", null) || carriers.map(c => c.id);
+function renderCarriers(){
+  $("#carriers").innerHTML = carriers.map(c => `<label><input type="checkbox" value="${c.id}" ${picked.includes(c.id) ? "checked" : ""} ${c.base ? "" : "disabled"}> ${esc(c.name)}${c.base ? "" : " <small>(check by hand)</small>"}</label>`).join("");
+  $("#carriers").querySelectorAll("input").forEach(i => i.onchange = () => { picked = [...$("#carriers").querySelectorAll("input:checked")].map(x => x.value); save("carriers", picked); });
+  $("#endpoints tbody").innerHTML = carriers.map(c => `<tr><td>${esc(c.name)}</td><td><input type="text" data-id="${c.id}" value="${esc(c.base)}" placeholder="not found yet"></td><td><small>${esc(STATUS_TEXT[c.status] || "")}</small></td></tr>`).join("");
+  $("#endpoints").querySelectorAll("input").forEach(i => i.onchange = () => {
+    const ov = load("endpoints", {}); ov[i.dataset.id] = { base: i.value.trim() }; save("endpoints", ov);
+    carriers.find(c => c.id === i.dataset.id).base = i.value.trim(); renderCarriers();
+  });
+}
+$("#resetEndpoints").onclick = () => { save("endpoints", {}); carriers = DEFAULT_CARRIERS.map(c => Object.assign({}, c)); renderCarriers(); };
+$("#proxy").value = load("proxy", ""); $("#proxy").onchange = () => save("proxy", $("#proxy").value.trim());
+$("#addDoc").onclick = () => { docs.push({ first:"", last:"", city:"", specialty:"", priority:!docs.length, npi:"", picks:null }); saveDocs(); renderDocs(); };
+$("#clearDocs").onclick = () => { docs = [{ first:"", last:"", city:"", specialty:"", priority:true, npi:"", picks:null }]; saveDocs(); renderDocs(); $("#results").innerHTML = ""; };
+$("#zip").value = load("zip", "92648"); $("#zip").onchange = () => save("zip", $("#zip").value.trim());
+
+// ---------------------------------------------------------------------------
+// Run
+function progress(t){ $("#progress").textContent = t; }
+$("#go").onclick = async () => {
+  const active = docs.filter(d => d.last.trim());
+  if (!active.length) { progress("Type at least one doctor's last name."); return; }
+  if (!active.some(d => d.priority)) active[0].priority = true;
+  const list = carriers.filter(c => c.base && picked.includes(c.id));
+  $("#go").disabled = true; $("#results").innerHTML = "";
+  try {
+    // 1. NPI registry, so every carrier is searched for the same exact person
+    progress("Looking up doctors in the national NPI registry...");
+    let needPick = false;
+    await Promise.all(active.map(async d => {
+      if (d.picks) return;
+      try { d.picks = await nppesLookup(d); } catch (e) { d.picks = []; d.npiError = e.message; }
+      const top = d.picks[0];
+      if (top && (d.picks.length === 1 || (top.score >= 2 && !(d.picks[1] && d.picks[1].score === top.score)))) d.npi = top.npi;
+      else if (d.picks.length > 1) needPick = true;
+    }));
+    saveDocs(); renderDocs();
+    const npiErr = active.find(d => d.npiError);
+    if (needPick && active.some(d => d.picks && d.picks.length > 1 && !d.npi)) {
+      progress("More than one doctor matches a name. Pick the right one under each doctor (or choose \"None of these\"), then click Find matches again.");
+      active.filter(d => d.picks && d.picks.length > 1 && !d.npi).forEach(d => { d.npi = d.picks[0].npi; });
+      saveDocs(); renderDocs(); return;
+    }
+    // 2. Each carrier
+    const results = {};
+    let done = 0;
+    progress(`Searching ${list.length} carrier directories...` + (npiErr ? `\n(NPI registry unavailable: ${npiErr.npiError}. Searching by name instead.)` : ""));
+    await Promise.all(list.map(async c => {
+      const r = results[c.id] = { networks: {}, perDoc: [], error: null };
+      try {
+        for (const [di, d] of active.entries()) {
+          const pracs = await findPractitioners(c, d);
+          r.perDoc[di] = pracs.length ? "found" : "notfound";
+          for (const p of pracs) {
+            for (const role of await rolesFor(c, p)) {
+              if (role.states.length && !role.states.includes("CA")) continue;
+              const net = r.networks[role.networkId] || (r.networks[role.networkId] = { id: role.networkId, name: role.networkName, byDoc: active.map(() => []), plans: null });
+              net.byDoc[di].push(role);
+            }
+          }
+        }
+        for (const net of Object.values(r.networks)) {
+          net.plans = await plansForNetwork(c, net.id);
+          net.medicare = looksMedicare(net.name, net.plans); net.ppo = looksPPO(net.name, net.plans);
+        }
+        if ($("#medicareOnly").checked) {
+          const all = Object.values(r.networks); r.hidden = all.filter(n => !n.medicare).length;
+          r.networks = Object.fromEntries(all.filter(n => n.medicare).map(n => [n.id, n]));
+        }
+      } catch (e) { r.error = e.message; }
+      done++; progress(`Searched ${done} of ${list.length} carriers...`);
+    }));
+    render(results, active, list);
+    progress("Done. " + new Date().toLocaleTimeString());
+  } finally { $("#go").disabled = false; }
+};
+
+function docLabel(d){ return (d.first ? d.first + " " : "") + d.last + (d.specialty ? " (" + d.specialty + ")" : ""); }
+
+function render(results, active, list){
+  const opts = rank(results, active, list);
+  const pi = active.findIndex(d => d.priority);
+  let h = `<h2>Best options</h2>`;
+  if (!opts.length) h += `<div class="card">No carrier directory we could search lists these doctors together. See each carrier below, and check the carriers marked "check by hand".</div>`;
+  h += `<div class="best">` + opts.slice(0, 8).map((o, i) => {
+    const cls = o.n === active.length && o.prio ? "" : o.prio ? "partial" : "weak";
+    const plans = o.net.plans && o.net.plans.length ? o.net.plans.map(p => p.name).slice(0, 6).join("; ") : "";
+    const groupLine = o.group ? `Medical group: <b>${esc(o.group)}</b>` : o.net.ppo ? "PPO network: medical group doesn't matter" : `<span class="err">Doctors are in different medical groups; on an HMO they may not all be usable together</span>`;
+    return `<div class="opt ${cls}"><h3>${i + 1}. ${esc(o.carrier.name)}: ${esc(o.net.name)}</h3>
+      <div class="meta">${groupLine} &middot; keeps ${o.n} of ${active.length}${o.prio ? "" : ", <b>not</b> the priority doctor"}</div>
+      ${plans ? `<small>Plans on this network: ${esc(plans)}</small>` : ""}
+      <div>${active.map((d, di) => `<span class="chip ${o.kept[di] ? "yes" : "no"}">${o.kept[di] ? "&#10003;" : "no match"} ${esc(docLabel(d))}${di === pi ? " &#9733;" : ""}</span>`).join("")}</div></div>`;
+  }).join("") + `</div>`;
+
+  h += `<h2>By carrier</h2>`;
+  for (const c of carriers) {
+    const r = results[c.id];
+    if (!r) { h += `<div class="card"><b>${esc(c.name)}</b>: not searched automatically (${esc(c.base ? "unchecked" : STATUS_TEXT[c.status])}). <a href="${esc(c.search)}" target="_blank" rel="noopener">Check by hand</a></div>`; continue; }
+    if (r.error) { h += `<div class="card"><b>${esc(c.name)}</b>: <span class="err">directory error: ${esc(r.error)}</span>. <a href="${esc(c.search)}" target="_blank" rel="noopener">Check by hand</a></div>`; continue; }
+    const nets = Object.values(r.networks);
+    h += `<div class="matrix card"><b>${esc(c.name)}</b>${r.hidden ? ` <small style="display:inline;color:var(--muted)">(${r.hidden} non-Medicare networks hidden)</small>` : ""}`;
+    if (!nets.length) { h += `<p>No match for any of these doctors in a ${$("#medicareOnly").checked ? "Medicare " : ""}network. <a href="${esc(c.search)}" target="_blank" rel="noopener">Double-check by hand</a></p></div>`; continue; }
+    h += `<table><thead><tr><th>Network / plans</th>${active.map((d, di) => `<th>${esc(docLabel(d))}${di === pi ? " &#9733;" : ""}</th>`).join("")}</tr></thead><tbody>`;
+    for (const n of nets) {
+      h += `<tr><td>${esc(n.name)}${n.plans && n.plans.length ? `<small>${esc(n.plans.map(p => p.name).slice(0, 5).join("; "))}</small>` : ""}</td>` +
+        n.byDoc.map(es => es.length
+          ? `<td class="in">${[...new Map(es.map(e => [normGroup(e.group), e])).values()].map(e => `${esc(e.group || "In network, no group listed")}<small>${esc([...new Set(e.cities)].join(", "))}${e.accepting ? " &middot; new patients: " + esc(e.accepting) : ""}</small>`).join("")}</td>`
+          : `<td class="nm">no match</td>`).join("") + `</tr>`;
+    }
+    h += `</tbody></table>${r.perDoc.some(x => x === "notfound") ? `<small>"no match" in every row means the doctor isn't in this carrier's directory at all.</small>` : ""}</div>`;
+  }
+  $("#results").innerHTML = h;
+}
+
+// ---------------------------------------------------------------------------
+// Sample data for ?demo=1 (made-up doctors, groups and plans).
+function demoFetch(url){
+  const u = new URL(url), p = u.searchParams, path = u.pathname;
+  const B = arr => Promise.resolve({ resourceType:"Bundle", type:"searchset", entry: arr.map(r => ({ resource: r })) });
+  if (u.host === "npiregistry.cms.hhs.gov") {
+    const last = (p.get("last_name") || "").toLowerCase();
+    const hits = DEMO_DATA.docs.filter(d => d.last.toLowerCase() === last);
+    return Promise.resolve({ results: hits.map(d => ({ number: d.npi, basic: { first_name: d.first.toUpperCase(), last_name: d.last.toUpperCase(), credential: "MD" },
+      addresses: [{ address_purpose: "LOCATION", city: d.city.toUpperCase() }], taxonomies: [{ primary: true, desc: d.spec }] })) });
+  }
+  const carrier = carriers.find(c => c.base && url.startsWith(c.base)); const cid = carrier ? carrier.id : "";
+  const nets = DEMO_DATA.nets.filter(n => n.carrier === cid);
+  if (/\/Practitioner$/.test(path)) {
+    const id = (p.get("identifier") || "").split("|").pop();
+    return B(DEMO_DATA.docs.filter(d => d.npi === id && DEMO_DATA.roles.some(r => r.npi === d.npi && nets.some(n => n.id === r.net))).map(d => ({ resourceType:"Practitioner", id: "p" + d.npi, identifier:[{ system: NPI_SYSTEM, value: d.npi }], name:[{ family: d.last, given:[d.first] }] })));
+  }
+  if (/\/PractitionerRole$/.test(path)) {
+    const npi = (p.get("practitioner") || "").replace("Practitioner/p", "");
+    const rs = DEMO_DATA.roles.filter(r => r.npi === npi && nets.some(n => n.id === r.net));
+    const inc = [];
+    rs.forEach(r => { inc.push({ resourceType:"Organization", id: r.grp.replace(/\W/g, ""), name: r.grp }); inc.push({ resourceType:"Location", id: "L" + r.city.replace(/\W/g, ""), address:{ city: r.city, state:"CA" } }); });
+    nets.forEach(n => inc.push({ resourceType:"Organization", id: n.id, name: n.name }));
+    return B(rs.map((r, i) => ({ resourceType:"PractitionerRole", id: "r" + npi + i, active: true, practitioner:{ reference:"Practitioner/p" + npi },
+      organization:{ reference:"Organization/" + r.grp.replace(/\W/g, "") }, location:[{ reference:"Location/L" + r.city.replace(/\W/g, "") }],
+      extension:[{ url:"http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/network-reference", valueReference:{ reference:"Organization/" + r.net } }] })).concat(inc));
+  }
+  if (/\/InsurancePlan$/.test(path)) {
+    const n = DEMO_DATA.nets.find(x => "Organization/" + x.id === p.get("network"));
+    return B(n ? n.plans.map(name => ({ resourceType:"InsurancePlan", id: name.replace(/\W/g, ""), name, type:[{ text:"Medicare Advantage" }] })) : []);
+  }
+  return Promise.resolve(null);
+}
+const DEMO_DATA = {
+  docs: [
+    { npi:"1000000001", first:"Maria", last:"Alvarez", city:"Huntington Beach", spec:"Internal Medicine" },
+    { npi:"1000000002", first:"James", last:"Okafor", city:"Fountain Valley", spec:"Cardiovascular Disease" },
+    { npi:"1000000003", first:"Susan", last:"Lee", city:"Newport Beach", spec:"Dermatology" },
+    { npi:"1000000004", first:"David", last:"Patel", city:"Irvine", spec:"Orthopaedic Surgery" },
+  ],
+  nets: [
+    { id:"n-hum-hmo", carrier:"humana", name:"Humana Gold Plus HMO (Orange County)", plans:["Humana Gold Plus H0028-023 (HMO)", "Humana Gold Plus SNP-DE (HMO D-SNP)"] },
+    { id:"n-hum-ppo", carrier:"humana", name:"HumanaChoice PPO (Medicare)", plans:["HumanaChoice H5216-213 (PPO)"] },
+    { id:"n-uhc-hmo", carrier:"uhc", name:"AARP Medicare Advantage HMO - SoCal", plans:["AARP Medicare Advantage SecureHorizons Focus (HMO)", "AARP Medicare Advantage Choice Plan 1 (HMO-POS)"] },
+  ],
+  roles: [
+    { npi:"1000000001", net:"n-hum-hmo", grp:"Optum Care Medical Group", city:"Huntington Beach" },
+    { npi:"1000000001", net:"n-hum-hmo", grp:"Talbert Medical Group", city:"Huntington Beach" },
+    { npi:"1000000001", net:"n-hum-ppo", grp:"Optum Care Medical Group", city:"Huntington Beach" },
+    { npi:"1000000001", net:"n-uhc-hmo", grp:"Optum Care Medical Group", city:"Huntington Beach" },
+    { npi:"1000000002", net:"n-hum-hmo", grp:"Talbert Medical Group", city:"Fountain Valley" },
+    { npi:"1000000002", net:"n-uhc-hmo", grp:"Monarch HealthCare IPA", city:"Fountain Valley" },
+    { npi:"1000000003", net:"n-hum-hmo", grp:"Talbert Medical Group", city:"Newport Beach" },
+    { npi:"1000000003", net:"n-hum-ppo", grp:"Newport Dermatology Inc", city:"Newport Beach" },
+    { npi:"1000000004", net:"n-uhc-hmo", grp:"Optum Care Medical Group", city:"Irvine" },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+if (DEMO) {
+  $("#sampleBanner").hidden = false;
+  carriers.find(c => c.id === "humana").base = carriers.find(c => c.id === "humana").base || "https://fhir.humana.com/api";
+  docs = [
+    { first:"Maria", last:"Alvarez", city:"Huntington Beach", specialty:"Primary care", priority:true, npi:"", picks:null },
+    { first:"James", last:"Okafor", city:"Fountain Valley", specialty:"Cardiology", priority:false, npi:"", picks:null },
+    { first:"Susan", last:"Lee", city:"Newport Beach", specialty:"Dermatology", priority:false, npi:"", picks:null },
+    { first:"David", last:"Patel", city:"Irvine", specialty:"Orthopedics", priority:false, npi:"", picks:null },
+  ];
+  saveDocs = () => {};
+}
+renderDocs(); renderCarriers();
+</script>
+</body>
+</html>
