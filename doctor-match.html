@@ -270,20 +270,22 @@ async function rolesFor(c, prac){
     const netRefs = (role.extension || []).filter(x => (x.url || "").endsWith(EXT_NETWORK)).map(x => refId(x.valueReference)).filter(Boolean);
     const orgRef = refId(role.organization);
     const locRefs = (role.location || []).map(refId).filter(Boolean);
-    const org = orgRef ? await getRes(c, orgRef) : null;
+    // Use the name the directory already put on the reference; only look the record up when it's missing.
+    const org = orgRef && !(role.organization && role.organization.display) ? await getRes(c, orgRef) : null;
     if (!netRefs.length && orgRef) netRefs.push(...await networksOfOrg(c, orgRef));
     const locs = (await Promise.all(locRefs.slice(0, 4).map(r => getRes(c, r)))).filter(Boolean);
     const newPat = (role.extension || []).find(x => (x.url || "").endsWith(EXT_NEWPAT));
     const accepting = newPat ? ((newPat.extension || []).find(x => x.url === "acceptingPatients") || {}).valueCodeableConcept : null;
     const specialty = (role.specialty || []).map(s => s.text || (s.coding || [])[0] && s.coding[0].display).filter(Boolean).join(", ");
-    for (const nref of netRefs) {
-      const net = await getRes(c, nref);
+    await Promise.all(netRefs.map(async nref => {
+      const shown = ((role.extension || []).find(x => refId(x.valueReference) === nref) || {}).valueReference?.display;
+      const net = shown ? null : await getRes(c, nref);
       out.push({ networkId: nref, networkName: (net && net.name) || ((role.extension || []).find(x => refId(x.valueReference) === nref) || {}).valueReference?.display || nref,
-                 group: org ? (org.name || "") : (role.organization && role.organization.display) || "",
+                 group: (role.organization && role.organization.display) || (org && org.name) || "",
                  cities: locs.map(l => titleCase((l.address && l.address.city) || "")).filter(Boolean),
                  states: locs.map(l => ((l.address && l.address.state) || "").toUpperCase()).filter(Boolean),
                  specialty, accepting: accepting ? ((accepting.coding || [])[0] || {}).code || accepting.text : "" });
-    }
+    }));
   }));
   return out;
 }
