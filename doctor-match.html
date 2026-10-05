@@ -350,11 +350,31 @@ async function plansForNetwork(c, netRef){
       const plans = bundleEntries(await getJSON(c.base.replace(/\/+$/, "") + "/InsurancePlan?network=" + encodeURIComponent(netRef) + "&_count=50"));
       const netId = netRef.split("/").pop();
       const refsNet = p => JSON.stringify([p.network || [], (p.plan || []).map(x => x.network || [])]).includes(netId);
-      return plans.filter(p => p.resourceType === "InsurancePlan" && refsNet(p)).map(p => ({ name: p.name || p.alias && p.alias[0] || p.id,
+      const all = plans.filter(p => p.resourceType === "InsurancePlan" && refsNet(p)).map(p => ({ name: p.name || p.alias && p.alias[0] || p.id,
+        ids: [p.id, ...(p.identifier || []).map(i => i.value)].filter(Boolean).join(" "),
         type: (p.type || []).map(t => t.text || (t.coding || []).map(cd => cd.display || cd.code).join(" ")).join(" ") }));
+      const kept = all.filter(pl => !nonCommissionable(c, pl));
+      kept.dropped = all.length - kept.length;
+      return kept;
     } catch (e) { return []; }
   })();
   return planCache[key];
+}
+
+// Plans Danny is not paid on, confirmed by the carrier. Never shown, never searched for.
+// Add a carrier's list here when it confirms one. Match is by contract-PBP (e.g. H4982-022) or exact plan name.
+const NON_COMMISSIONABLE = {
+  // Aetna "Non-Commissionable Individual Medicare Products - Plan Year 2027", California market
+  aetna: {
+    ids: ["H4982-022", "H4982-001", "H4982-002", "H4982-025", "H4982-007", "H0523-065", "H0523-086", "H0523-083", "H0523-089", "H4982-030", "H4982-026", "H4982-003"],
+    names: ["Aetna Medicare Prime Value Plus (HMO)", "Aetna Medicare Signature (HMO)", "Aetna Medicare Prime Extra (HMO)", "Aetna Medicare Signature Extra (HMO)"]
+  }
+};
+const normPlan = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+function nonCommissionable(c, pl){
+  const nc = NON_COMMISSIONABLE[c.id]; if (!nc) return false;
+  const text = (pl.name + " " + pl.ids).toUpperCase().replace(/(H\d{4})\s*[-\/_ ]\s*(\d{3})/g, "$1-$2");
+  return nc.ids.some(id => new RegExp("(^|[^0-9A-Z])" + id + "(?![0-9])").test(text)) || nc.names.some(n => normPlan(n) === normPlan(pl.name));
 }
 
 // Directories list nationwide networks; these spot ones that can't apply to an individual California client.
@@ -515,7 +535,10 @@ $("#go").onclick = async () => {
           // Plan names only matter for Medicare-looking networks; skip the lookup for the rest when filtering.
           net.plans = ($("#medicareOnly").checked && nets.length > 12 && !MEDICARE_RE.test(net.name)) ? [] : await plansForNetwork(c, net.id);
           net.medicare = looksMedicare(net.name, net.plans); net.ppo = looksPPO(net.name, net.plans);
+          net.noncomm = (!net.plans.length && net.plans.dropped > 0) || nonCommissionable(c, { name: net.name, ids: "" });   // every plan on it is non-commissionable
         }));
+        { const all = Object.values(r.networks), keep = all.filter(n => !n.noncomm);
+          r.noncomm = all.length - keep.length; r.networks = Object.fromEntries(keep.map(n => [n.id, n])); }
         if ($("#medicareOnly").checked) {
           const all = Object.values(r.networks), keep = all.filter(n => n.medicare && individualCA(n.name));
           keep.forEach(n => { n.plans = (n.plans || []).filter(pl => individualCA(pl.name)); });
@@ -577,7 +600,7 @@ function render(results, active, list){
     if (!r) { h += `<div class="card"><b>${esc(c.name)}</b>: not searched automatically (${esc(c.base ? "unchecked" : STATUS_TEXT[c.status])}). <a href="${esc(c.search)}" target="_blank" rel="noopener">Check by hand</a></div>`; continue; }
     if (r.error) { h += `<div class="card"><b>${esc(c.name)}</b>: <span class="err">directory error: ${esc(r.error)}</span>. <a href="${esc(c.search)}" target="_blank" rel="noopener">Check by hand</a></div>`; continue; }
     const nets = Object.values(r.networks);
-    h += `<div class="matrix card"><b>${esc(c.name)}</b>${r.hidden ? ` <small style="display:inline;color:var(--muted)">(${r.hidden} other-state, employer-group or non-Medicare networks hidden)</small>` : ""}`;
+    h += `<div class="matrix card"><b>${esc(c.name)}</b>${r.hidden ? ` <small style="display:inline;color:var(--muted)">(${r.hidden} other-state, employer-group or non-Medicare networks hidden)</small>` : ""}${r.noncomm ? ` <small style="display:inline;color:var(--muted)">(${r.noncomm} non-commissionable hidden)</small>` : ""}`;
     if (!nets.length) { h += `<p>No match for any of these doctors in a ${$("#medicareOnly").checked ? "Medicare " : ""}network. <a href="${esc(c.search)}" target="_blank" rel="noopener">Double-check by hand</a></p></div>`; continue; }
     h += `<table><thead><tr><th>Network / plans</th>${active.map((d, di) => `<th>${esc(docLabel(d))}${di === pi ? " &#9733;" : ""}</th>`).join("")}</tr></thead><tbody>`;
     // Networks where every doctor shows the same thing share one row.
