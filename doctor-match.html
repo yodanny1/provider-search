@@ -162,7 +162,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, ch => ({ "&":"&a
 // Network layer: try the directory directly, fall back to the helper.
 const directOK = {};   // host -> false once a direct call has failed
 let inflight = 0; const waiters = [];
-async function slot(){ if (inflight < 6) { inflight++; return; } await new Promise(r => waiters.push(r)); inflight++; }
+async function slot(){ if (inflight < 10) { inflight++; return; } await new Promise(r => waiters.push(r)); inflight++; }
 function release(){ inflight--; const w = waiters.shift(); if (w) w(); }
 
 function logLine(t){
