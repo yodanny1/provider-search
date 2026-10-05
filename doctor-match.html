@@ -360,7 +360,7 @@ function individualCA(name){ return !OTHER_STATE_RE.test(name) && !GROUP_PLAN_RE
 const ACCEPTING_TEXT = { newpt:"Accepting new patients", existptonly:"Existing patients only", existptfam:"Existing patients only", nopt:"Not accepting new patients" };
 const MEDICARE_RE = /medicare|advantage|\bma\b|\bmapd\b|d-?snp|c-?snp|\bsnp\b|mediadv|65 ?plus|senior/i;
 function looksMedicare(net, plans){ return MEDICARE_RE.test(net) || plans.some(p => MEDICARE_RE.test(p.name + " " + p.type)); }
-function looksPPO(net, plans){ return /\bppo\b|\bpffs\b/i.test(net + " " + plans.map(p => p.name).join(" ")); }
+function looksPPO(net, plans){ return /\bppo|\bpffs/i.test(net + " " + plans.map(p => p.name).join(" ")); }
 function normGroup(g){ return (g || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\b(inc|llc|pc|a medical corporation|medical corp|corporation)\b/g, "").trim(); }
 
 // ---------------------------------------------------------------------------
@@ -527,12 +527,21 @@ function render(results, active, list){
   const pi = active.findIndex(d => d.priority);
   let h = `<h2>Best options</h2>`;
   if (!opts.length) h += `<div class="card">No carrier directory we could search lists these doctors together. See each carrier below, and check the carriers marked "check by hand".</div>`;
-  h += `<div class="best">` + opts.slice(0, 8).map((o, i) => {
+  // Same carrier, same medical group, same doctors kept: one card listing every network it applies to.
+  const cards = [];
+  for (const o of opts) {
+    const k = [o.carrier.id, o.group ? normGroup(o.group) : "*", o.net.ppo, o.kept.join()].join("|");
+    const m = cards.find(x => x.key === k);
+    if (m) { if (!m.names.includes(o.net.name)) m.names.push(o.net.name); m.plans.push(...(o.net.plans || []).map(p => p.name)); continue; }
+    cards.push({ key: k, o, names: [o.net.name], plans: (o.net.plans || []).map(p => p.name) });
+  }
+  h += `<div class="best">` + cards.slice(0, 8).map(({ o, names, plans: planNames }, i) => {
     const cls = o.n === active.length && o.prio ? "" : o.prio ? "partial" : "weak";
-    const plans = o.net.plans && o.net.plans.length ? o.net.plans.map(p => p.name).slice(0, 6).join("; ") : "";
+    const plans = [...new Set(planNames)].slice(0, 6).join("; ");
     const groupLine = o.group ? `Medical group: <b>${esc(o.group)}</b>` : o.net.ppo ? "PPO network: medical group doesn't matter" : `<span class="err">Doctors are in different medical groups; on an HMO they may not all be usable together</span>`;
-    return `<div class="opt ${cls}"><h3>${i + 1}. ${esc(o.carrier.name)}: ${esc(o.net.name)}</h3>
+    return `<div class="opt ${cls}"><h3>${i + 1}. ${esc(o.carrier.name)}: ${esc(names[0])}${names.length > 1 ? ` and ${names.length - 1} more network${names.length > 2 ? "s" : ""}` : ""}</h3>
       <div class="meta">${groupLine} &middot; keeps ${o.n} of ${active.length}${o.prio ? "" : ", <b>not</b> the priority doctor"}</div>
+      ${names.length > 1 ? `<details><summary>All ${names.length} networks</summary><small>${names.map(esc).join("<br>")}</small></details>` : ""}
       ${plans ? `<small>Plans on this network: ${esc(plans)}</small>` : ""}
       <div>${active.map((d, di) => `<span class="chip ${o.kept[di] ? "yes" : "no"}">${o.kept[di] ? "&#10003;" : "no match"} ${esc(docLabel(d))}${di === pi ? " &#9733;" : ""}</span>`).join("")}</div></div>`;
   }).join("") + `</div>`;
@@ -546,11 +555,20 @@ function render(results, active, list){
     h += `<div class="matrix card"><b>${esc(c.name)}</b>${r.hidden ? ` <small style="display:inline;color:var(--muted)">(${r.hidden} other-state, employer-group or non-Medicare networks hidden)</small>` : ""}`;
     if (!nets.length) { h += `<p>No match for any of these doctors in a ${$("#medicareOnly").checked ? "Medicare " : ""}network. <a href="${esc(c.search)}" target="_blank" rel="noopener">Double-check by hand</a></p></div>`; continue; }
     h += `<table><thead><tr><th>Network / plans</th>${active.map((d, di) => `<th>${esc(docLabel(d))}${di === pi ? " &#9733;" : ""}</th>`).join("")}</tr></thead><tbody>`;
+    // Networks where every doctor shows the same thing share one row.
+    const rows = [];
     for (const n of nets) {
-      h += `<tr><td>${esc(n.name)}${n.plans && n.plans.length ? `<small>${esc(n.plans.map(p => p.name).slice(0, 5).join("; "))}</small>` : ""}</td>` +
-        n.byDoc.map(es => es.length
+      const cells = n.byDoc.map(es => es.length
           ? `<td class="in">${[...new Map(es.map(e => [normGroup(e.group), e])).values()].map(e => `${esc(e.group || "In network, no group listed")}<small>${esc([...new Set(e.cities)].join(", "))}</small>${e.accepting ? `<b style="display:block;font-size:13px;color:${e.accepting === "newpt" ? "var(--ok)" : "var(--bad)"}">${e.accepting === "newpt" ? "&#10003; " : "&#10007; "}${esc(ACCEPTING_TEXT[e.accepting] || e.accepting)}</b>` : ""}`).join("")}</td>`
-          : `<td class="nm">no match</td>`).join("") + `</tr>`;
+          : `<td class="nm">no match</td>`).join("");
+      const row = rows.find(x => x.cells === cells);
+      if (row) row.nets.push(n); else rows.push({ cells, nets: [n] });
+    }
+    for (const { cells, nets: ns } of rows) {
+      const planNames = [...new Set(ns.flatMap(n => (n.plans || []).map(p => p.name)))];
+      const names = ns.length === 1 ? esc(ns[0].name)
+        : `${esc(ns[0].name)} <b>and ${ns.length - 1} more</b><details><summary>All ${ns.length} networks</summary><small>${ns.map(n => esc(n.name)).join("<br>")}</small></details>`;
+      h += `<tr><td>${names}${planNames.length ? `<small>${esc(planNames.slice(0, 5).join("; "))}</small>` : ""}</td>${cells}</tr>`;
     }
     h += `</tbody></table>${r.perDoc.some(x => x === "notfound") ? `<small>"no match" in every row means the doctor isn't in this carrier's directory at all.</small>` : ""}</div>`;
   }
