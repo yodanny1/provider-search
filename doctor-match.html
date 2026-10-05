@@ -240,6 +240,7 @@ function bundleEntries(b){ return (b && b.entry || []).map(e => e.resource).filt
 function refId(ref){ return ref && ref.reference ? ref.reference.replace(/^.*?([A-Za-z]+\/[^/]+)$/, "$1") : null; }
 function nextLink(b){ const l = (b.link || []).find(x => x.relation === "next"); return l ? l.url : null; }
 
+function notFoundIsEmpty(e){ if (e.httpStatus === 404) return []; throw e; }
 async function searchAll(url, maxPages){
   const out = []; let page = 0;
   while (url && page < maxPages) { const b = await getJSON(url); out.push(...bundleEntries(b)); url = nextLink(b); page++; }
@@ -254,12 +255,13 @@ async function findPractitioners(c, doc){
         const res = bundleEntries(await getJSON(base + "/Practitioner?identifier=" + encodeURIComponent(q) + "&_count=10"))
           .filter(r => r.resourceType === "Practitioner" && (r.identifier || []).some(i => String(i.value) === doc.npi));
         if (res.length) return res;
-      } catch (e) { if (e.httpStatus && e.httpStatus !== 400) throw e; }
+      } catch (e) { if (e.httpStatus && e.httpStatus !== 400 && e.httpStatus !== 404) throw e; }
     }
     return [];
   }
   // No NPI: name search, keep only exact last-name (and first-name, when given) matches.
-  const res = bundleEntries(await getJSON(base + "/Practitioner?family=" + encodeURIComponent(doc.last.trim()) + (doc.first.trim() ? "&given=" + encodeURIComponent(doc.first.trim()) : "") + "&_count=20"));
+  // Some directories answer a search that finds nobody with HTTP 404 instead of an empty list.
+  const res = bundleEntries(await getJSON(base + "/Practitioner?family=" + encodeURIComponent(doc.last.trim()) + (doc.first.trim() ? "&given=" + encodeURIComponent(doc.first.trim()) : "") + "&_count=20").catch(notFoundIsEmpty));
   const L = doc.last.trim().toLowerCase(), F = doc.first.trim().toLowerCase();
   const byName = res.filter(r => r.resourceType === "Practitioner" && (r.name || []).some(n => (n.family || "").toLowerCase() === L && (!F || (n.given || []).some(g => g.toLowerCase().startsWith(F)))));
   // Name-only directories: when the NPI is known, keep the listings carrying it (or carrying no NPI at all).
@@ -278,7 +280,7 @@ async function rolesFor(c, prac){
   const base = c.base.replace(/\/+$/, "");
   const url = base + "/PractitionerRole?practitioner=Practitioner/" + encodeURIComponent(prac.id) +
     "&_include=PractitionerRole:organization&_include=PractitionerRole:network&_include=PractitionerRole:location&_count=100";
-  const all = await searchAll(url, 5);
+  const all = await searchAll(url, 5).catch(notFoundIsEmpty);
   all.filter(r => r.resourceType !== "PractitionerRole" && r.id).forEach(r => { cache[c.id + "|" + r.resourceType + "/" + r.id] = Promise.resolve(r); });
   const roles = all.filter(r => r.resourceType === "PractitionerRole" && r.active !== false);
   // Fetch every record the roles point at in a few batched calls instead of one call per record.

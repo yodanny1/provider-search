@@ -57,18 +57,37 @@ function addAuth_(host, cfg, headers) {
   if (cfg.tokenUrl) {
     var cache = CacheService.getScriptCache(), key = 'tok_' + host, tok = cache.get(key);
     if (!tok) {
-      var r = UrlFetchApp.fetch(cfg.tokenUrl, {
-        method: 'post', muteHttpExceptions: true,
-        headers: { Authorization: 'Basic ' + Utilities.base64Encode(cfg.clientId + ':' + cfg.clientSecret) },
-        payload: { grant_type: 'client_credentials', scope: cfg.scope || '' }
-      });
-      var j = JSON.parse(r.getContentText());
-      if (!j.access_token) throw new Error('no token (HTTP ' + r.getResponseCode() + ')');
+      var j = fetchToken_(cfg);
       tok = j.access_token;
       cache.put(key, tok, Math.max(60, Math.min(21600, (j.expires_in || 3600) - 120)));
     }
     headers.Authorization = 'Bearer ' + tok;
   }
+}
+
+// Carriers differ in how they want the client id and secret sent, so try the usual ways in turn
+// (Basic header, form fields, JSON body) and keep the first that hands back a token.
+function fetchToken_(cfg) {
+  var form = { grant_type: 'client_credentials' };
+  if (cfg.scope) form.scope = cfg.scope;
+  var both = { grant_type: 'client_credentials', client_id: cfg.clientId, client_secret: cfg.clientSecret };
+  if (cfg.scope) both.scope = cfg.scope;
+  var tries = [
+    { method: 'post', headers: { Authorization: 'Basic ' + Utilities.base64Encode(cfg.clientId + ':' + cfg.clientSecret) }, payload: form },
+    { method: 'post', payload: both },
+    { method: 'post', contentType: 'application/json', payload: JSON.stringify(both) }
+  ];
+  var seen = [];
+  for (var i = 0; i < tries.length; i++) {
+    tries[i].muteHttpExceptions = true;
+    tries[i].headers = tries[i].headers || {};
+    tries[i].headers.Accept = 'application/json';
+    var r = UrlFetchApp.fetch(cfg.tokenUrl, tries[i]), text = r.getContentText(), j = null;
+    try { j = JSON.parse(text); } catch (e) {}
+    if (j && j.access_token) return j;
+    seen.push('try ' + (i + 1) + ': HTTP ' + r.getResponseCode() + (text ? ' ' + text.slice(0, 120).replace(/\s+/g, ' ') : ' (empty answer)'));
+  }
+  throw new Error('no token. ' + seen.join('; '));
 }
 
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
@@ -77,4 +96,11 @@ function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).se
 function testHelper() {
   var out = doGet({ parameter: { url: 'https://npiregistry.cms.hhs.gov/api/?version=2.1&last_name=nguyen&city=huntington%20beach&state=CA&limit=1' } });
   Logger.log(out.getContent().slice(0, 500));
+}
+
+// Run this from the editor (Run > testAnthem) to check the Anthem key: it logs whether a token came back
+// and the start of a doctor search, without the page.
+function testAnthem() {
+  var out = doGet({ parameter: { url: 'https://prod.totalview.healthos.elevancehealth.com/resources/unregistered/api/v1/fhir/cms_mandate/mcd/Practitioner?family=Nguyen&given=Vinh&_count=3' } });
+  Logger.log(out.getContent().slice(0, 1500));
 }
