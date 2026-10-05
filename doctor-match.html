@@ -129,7 +129,9 @@ const DEFAULT_CARRIERS = [
   { id:"scan", name:"SCAN", base:"https://providerdirectory.scanhealthplan.com", status:"open",
     wholeNetwork:"SCAN Medicare Advantage (all plans; directory doesn't split by plan)", dropGoneOrgs:true,
     search:"https://www.scanhealthplan.com/helpful-tools/provider-search?state=CA&zipOrAddress=92648&radius=10&path=discover-enroll" },
-  { id:"anthem", name:"Anthem Blue Cross", base:"", status:"key",
+  // Anthem (Elevance) approved Danny's key 2026-10-05; OAuth client credentials held by the helper. Its directory
+  // only searches practitioners by name, so NPI lookups go by name and then check the NPI.
+  { id:"anthem", name:"Anthem Blue Cross", base:"https://prod.totalview.healthos.elevancehealth.com/resources/unregistered/api/v1/fhir/cms_mandate/mcd", status:"key", nameSearch:true,
     search:"https://shop.anthem.com/medicare/quote/view-all-plans-recommended?brand=ABC&state=CA&locale=en_US&role=consumer" },
   // Alignment's directory isn't FHIR: its own "ProviderService" API (developer portal adas.alignmenthealth.com, 2026-10-05)
   // lists each doctor's IPA and the exact plans (contract-PBP) per plan year. Needs a subscription key in the helper.
@@ -165,7 +167,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, ch => ({ "&":"&a
 
 // ---------------------------------------------------------------------------
 // Network layer: try the directory directly, fall back to the helper.
-const directOK = { "adasgateway.alignmenthealth.com": false };   // host -> false once a direct call has failed (keyed hosts always go through the helper)
+const directOK = { "adasgateway.alignmenthealth.com": false, "prod.totalview.healthos.elevancehealth.com": false };   // host -> false once a direct call has failed (keyed hosts always go through the helper)
 let inflight = 0; const waiters = [];
 async function slot(){ if (inflight < 10) { inflight++; return; } await new Promise(r => waiters.push(r)); inflight++; }
 function release(){ inflight--; const w = waiters.shift(); if (w) w(); }
@@ -246,7 +248,7 @@ async function searchAll(url, maxPages){
 
 async function findPractitioners(c, doc){
   const base = c.base.replace(/\/+$/, "");
-  if (doc.npi) {
+  if (doc.npi && !c.nameSearch) {
     for (const q of [NPI_SYSTEM + "|" + doc.npi, doc.npi]) {
       try {
         const res = bundleEntries(await getJSON(base + "/Practitioner?identifier=" + encodeURIComponent(q) + "&_count=10"))
@@ -259,7 +261,10 @@ async function findPractitioners(c, doc){
   // No NPI: name search, keep only exact last-name (and first-name, when given) matches.
   const res = bundleEntries(await getJSON(base + "/Practitioner?family=" + encodeURIComponent(doc.last.trim()) + (doc.first.trim() ? "&given=" + encodeURIComponent(doc.first.trim()) : "") + "&_count=20"));
   const L = doc.last.trim().toLowerCase(), F = doc.first.trim().toLowerCase();
-  return res.filter(r => r.resourceType === "Practitioner" && (r.name || []).some(n => (n.family || "").toLowerCase() === L && (!F || (n.given || []).some(g => g.toLowerCase().startsWith(F))))).slice(0, 5);
+  const byName = res.filter(r => r.resourceType === "Practitioner" && (r.name || []).some(n => (n.family || "").toLowerCase() === L && (!F || (n.given || []).some(g => g.toLowerCase().startsWith(F)))));
+  // Name-only directories: when the NPI is known, keep the listings carrying it (or carrying no NPI at all).
+  const hasNpi = r => (r.identifier || []).some(i => String(i.value) === doc.npi), anyNpi = r => (r.identifier || []).some(i => /npi/i.test(i.system || ""));
+  return (doc.npi ? byName.filter(r => hasNpi(r) || !anyNpi(r)) : byName).slice(0, 5);
 }
 
 const cache = {};
