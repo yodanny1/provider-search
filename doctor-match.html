@@ -265,6 +265,14 @@ async function rolesFor(c, prac){
   const all = await searchAll(url, 5);
   all.filter(r => r.resourceType !== "PractitionerRole" && r.id).forEach(r => { cache[c.id + "|" + r.resourceType + "/" + r.id] = Promise.resolve(r); });
   const roles = all.filter(r => r.resourceType === "PractitionerRole" && r.active !== false);
+  // Fetch every record the roles point at in a few batched calls instead of one call per record.
+  const need = new Set();
+  roles.forEach(role => {
+    if (role.organization && !role.organization.display) need.add(refId(role.organization));
+    (role.extension || []).filter(x => (x.url || "").endsWith(EXT_NETWORK) && x.valueReference && !x.valueReference.display).forEach(x => need.add(refId(x.valueReference)));
+    (role.location || []).slice(0, 4).forEach(l => need.add(refId(l)));
+  });
+  await prefetch(c, [...need].filter(r => r && !cache[c.id + "|" + r]));
   const out = [];
   await Promise.all(roles.map(async role => {
     const netRefs = (role.extension || []).filter(x => (x.url || "").endsWith(EXT_NETWORK)).map(x => refId(x.valueReference)).filter(Boolean);
@@ -288,6 +296,25 @@ async function rolesFor(c, prac){
     }));
   }));
   return out;
+}
+
+// Batch-read records by id (Organization?_id=a,b,c). Falls back to one-by-one reads if the directory refuses.
+const batchOK = {};
+async function prefetch(c, refs){
+  const base = c.base.replace(/\/+$/, ""), byType = {};
+  refs.forEach(r => { const [t, id] = r.split("/"); (byType[t] = byType[t] || []).push(id); });
+  const jobs = [];
+  for (const [t, ids] of Object.entries(byType)) for (let i = 0; i < ids.length; i += 40) jobs.push([t, ids.slice(i, i + 40)]);
+  await Promise.all(jobs.map(async ([t, ids]) => {
+    if (batchOK[c.id] === false) return;
+    try {
+      const got = bundleEntries(await getJSON(base + "/" + t + "?_id=" + ids.map(encodeURIComponent).join(",") + "&_count=" + ids.length));
+      const want = new Set(ids), hits = got.filter(r => r.resourceType === t && want.has(r.id));
+      hits.forEach(r => { cache[c.id + "|" + t + "/" + r.id] = Promise.resolve(r); });
+      if (hits.length) batchOK[c.id] = true; else if (got.length && !batchOK[c.id]) { batchOK[c.id] = false; return; }
+      ids.forEach(id => { const k = c.id + "|" + t + "/" + id; if (!cache[k] && batchOK[c.id]) cache[k] = Promise.resolve(null); });
+    } catch (e) { if (!batchOK[c.id]) batchOK[c.id] = false; }
+  }));
 }
 
 const orgNetCache = {};
@@ -527,9 +554,17 @@ function demoFetch(url){
     const inc = [];
     rs.forEach(r => { inc.push({ resourceType:"Organization", id: r.grp.replace(/\W/g, ""), name: r.grp }); inc.push({ resourceType:"Location", id: "L" + r.city.replace(/\W/g, ""), address:{ city: r.city, state:"CA" } }); });
     nets.forEach(n => inc.push({ resourceType:"Organization", id: n.id, name: n.name }));
+    if (cid === "uhc") inc.length = 0;   // like UHC: no _include support, records are read by id
     return B(rs.map((r, i) => ({ resourceType:"PractitionerRole", id: "r" + npi + i, active: true, practitioner:{ reference:"Practitioner/p" + npi },
       organization:{ reference:"Organization/" + r.grp.replace(/\W/g, "") }, location:[{ reference:"Location/L" + r.city.replace(/\W/g, "") }],
       extension:[{ url:"http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/network-reference", valueReference:{ reference:"Organization/" + r.net } }] })).concat(inc));
+  }
+  if (/\/(Organization|Location)$/.test(path) && p.get("_id")) {
+    const ids = p.get("_id").split(","), all = [];
+    DEMO_DATA.roles.forEach(r => { all.push({ resourceType:"Organization", id: r.grp.replace(/\W/g, ""), name: r.grp }); all.push({ resourceType:"Location", id: "L" + r.city.replace(/\W/g, ""), address:{ city: r.city, state:"CA" } }); });
+    DEMO_DATA.nets.forEach(n => all.push({ resourceType:"Organization", id: n.id, name: n.name }));
+    const type = path.split("/").pop();
+    return B(all.filter((r, i) => r.resourceType === type && ids.includes(r.id) && all.findIndex(x => x.resourceType === type && x.id === r.id) === i));
   }
   if (/\/InsurancePlan$/.test(path)) {
     const n = DEMO_DATA.nets.find(x => "Organization/" + x.id === p.get("network"));
