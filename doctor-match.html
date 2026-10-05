@@ -131,7 +131,9 @@ const DEFAULT_CARRIERS = [
     search:"https://www.scanhealthplan.com/helpful-tools/provider-search?state=CA&zipOrAddress=92648&radius=10&path=discover-enroll" },
   { id:"anthem", name:"Anthem Blue Cross", base:"", status:"key",
     search:"https://shop.anthem.com/medicare/quote/view-all-plans-recommended?brand=ABC&state=CA&locale=en_US&role=consumer" },
-  { id:"alignment", name:"Alignment Health", base:"", status:"key",
+  // Alignment's directory isn't FHIR: its own "ProviderService" API (developer portal adas.alignmenthealth.com, 2026-10-05)
+  // lists each doctor's IPA and the exact plans (contract-PBP) per plan year. Needs a subscription key in the helper.
+  { id:"alignment", name:"Alignment Health", base:"https://adasgateway.alignmenthealth.com/providerservice", status:"key", api:"adas",
     search:"https://providersearch.alignmenthealthplan.com/" },
   { id:"blueshield", name:"Blue Shield of CA", base:"", status:"unknown",
     search:"https://www.blueshieldca.com/fad/home" },
@@ -163,7 +165,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, ch => ({ "&":"&a
 
 // ---------------------------------------------------------------------------
 // Network layer: try the directory directly, fall back to the helper.
-const directOK = {};   // host -> false once a direct call has failed
+const directOK = { "adasgateway.alignmenthealth.com": false };   // host -> false once a direct call has failed (keyed hosts always go through the helper)
 let inflight = 0; const waiters = [];
 async function slot(){ if (inflight < 10) { inflight++; return; } await new Promise(r => waiters.push(r)); inflight++; }
 function release(){ inflight--; const w = waiters.shift(); if (w) w(); }
@@ -370,6 +372,40 @@ async function plansForNetwork(c, netRef){
   return planCache[key];
 }
 
+// Alignment (api:"adas"): one getProvider call per doctor. Each listing ("ahRecord") names the IPA, office
+// addresses and the plans (contract-PBP per plan year) it covers, so every plan becomes its own "network" row.
+async function adasRoles(c, doc){
+  const base = c.base.replace(/\/+$/, ""), y = new Date().getFullYear();
+  const q = new URLSearchParams({ planyear: y + "," + (y + 1), directorytype: "Directory", pagesize: "30" });
+  if (doc.npi) q.set("npi", doc.npi); else { q.set("lastname", doc.last.trim()); if (doc.first.trim()) q.set("firstname", doc.first.trim()); }
+  let j;
+  try { j = await getJSON(base + "/getProvider?" + q); }
+  catch (e) { if (e.httpStatus === 401 || /HTTP 40[13]/.test(e.message)) e.message = "the Alignment key isn't set up in the helper yet"; if (e.httpStatus === 404 || /HTTP 404/.test(e.message)) return []; throw e; }
+  const L = doc.last.trim().toLowerCase(), F = doc.first.trim().toLowerCase();
+  const provs = ((j && j.response) || []).flatMap(x => x.providers || []).filter(pv => doc.npi ? String(pv.npi) === doc.npi
+    : (pv.nppes && (pv.nppes.lastName || "").toLowerCase() === L && (!F || (pv.nppes.firstName || "").toLowerCase().startsWith(F))));
+  const recs = provs.flatMap(pv => pv.ahRecords || []).filter(r => !r.directoryType || r.directoryType === "Directory");
+  // Newest plan year the directory has for this doctor (during the fall it lists next year's plans too).
+  const years = recs.flatMap(r => (r.pbp || []).map(b => +b.planYear)).filter(Boolean), year = years.length ? Math.max(...years) : 0;
+  const out = [];
+  for (const r of recs) {
+    const addrs = (r.addresses || []).filter(a => a.visitType !== "HomeVisitsOnly");
+    const ans = a => /^y/i.test(a.isAcceptingNewPatients || "") ? "newpt" : /existing/i.test(a.panelDescription || "") ? "existptonly" : /^n/i.test(a.isAcceptingNewPatients || "") ? "nopt" : "";
+    const accepting = addrs.map(ans).find(Boolean) || "";
+    const group = (r.ipa && (r.ipa.desc || r.ipa.msoName)) || (r.medGrpNetwork || [])[0] || "";
+    const specialty = (r.practisingSpecialities || []).map(x => x.desc).filter(Boolean).join(", ");
+    for (const b of (r.pbp || []).filter(b => +b.planYear === year)) {
+      const id = (b.healthPlanID || r.healthPlanID || "") + "-" + b.pbpid;
+      if ($("#medicareOnly").checked && /^[89]/.test(b.pbpid || "")) continue;   // PBP 800+ = employer group plans
+      out.push({ networkId: c.id + "|" + id + "|" + year, networkName: (b.pbpName || id) + " \u00b7 " + year,
+                 plans: [{ name: b.pbpName || id, ids: id, type: [r.lineOfBusiness, "Medicare Advantage"].filter(Boolean).join(" ") }],
+                 group, cities: addrs.map(a => titleCase(a.city || "")).filter(Boolean), states: addrs.map(a => (a.state || "").toUpperCase()).filter(Boolean),
+                 specialty, accepting });
+    }
+  }
+  return out;
+}
+
 // Plans Danny is not paid on, confirmed by the carrier. Never shown, never searched for.
 // Add a carrier's list here when it confirms one. Match is by contract-PBP (e.g. H4982-022) or exact plan name.
 const NON_COMMISSIONABLE = {
@@ -527,6 +563,16 @@ $("#go").onclick = async () => {
       try {
         for (const [di, d] of active.entries()) {
           progress(`${c.name}: looking for ${docLabel(d)}...`);
+          if (c.api === "adas") {
+            const roles = await adasRoles(c, d);
+            r.perDoc[di] = roles.length ? "found" : "notfound";
+            for (const role of roles) {
+              if (role.states.length && !role.states.includes("CA")) continue;
+              const net = r.networks[role.networkId] || (r.networks[role.networkId] = { id: role.networkId, name: role.networkName, byDoc: active.map(() => []), plans: null, given: role.plans });
+              net.byDoc[di].push(role);
+            }
+            continue;
+          }
           const pracs = await findPractitioners(c, d);
           if (pracs.length) progress(`${c.name}: found ${docLabel(d)}, reading network listings...`);
           r.perDoc[di] = pracs.length ? "found" : "notfound";
@@ -542,7 +588,8 @@ $("#go").onclick = async () => {
         progress(`${c.name}: found ${nets.length} networks, reading their plans...`);
         await Promise.all(nets.map(async net => {
           // Plan names only matter for Medicare-looking networks; skip the lookup for the rest when filtering.
-          net.plans = ($("#medicareOnly").checked && nets.length > 12 && !MEDICARE_RE.test(net.name)) ? [] : await plansForNetwork(c, net.id);
+          if (net.given) { net.plans = net.given.filter(pl => !nonCommissionable(c, pl)); net.plans.dropped = net.given.length - net.plans.length; }
+          else net.plans = ($("#medicareOnly").checked && nets.length > 12 && !MEDICARE_RE.test(net.name)) ? [] : await plansForNetwork(c, net.id);
           net.medicare = looksMedicare(net.name, net.plans); net.ppo = looksPPO(net.name, net.plans);
           net.noncomm = (!net.plans.length && net.plans.dropped > 0) || nonCommissionable(c, { name: net.name, ids: "" });   // every plan on it is non-commissionable
         }));
@@ -642,6 +689,14 @@ function demoFetch(url){
     const hits = DEMO_DATA.docs.filter(d => p.get("number") ? d.npi === p.get("number") : d.last.toLowerCase() === last);
     return Promise.resolve({ results: hits.map(d => ({ number: d.npi, basic: { first_name: d.first.toUpperCase(), last_name: d.last.toUpperCase(), credential: "MD" },
       addresses: [{ address_purpose: "LOCATION", city: d.city.toUpperCase() }], taxonomies: [{ primary: true, desc: d.spec }] })) });
+  }
+  if (u.host === "adasgateway.alignmenthealth.com") {
+    const y = String(new Date().getFullYear() + 1), d = DEMO_DATA.docs.find(x => x.npi === p.get("npi"));
+    const plans = [["007", "Alignment Health My Choice (HMO)"], ["016", "Alignment Health Platinum (HMO-POS)"]].map(([pbpid, pbpName]) => ({ planYear: y, healthPlanID: "H3815", pbpid, pbpName }));
+    const rec = (ipa, city, yes) => ({ lineOfBusiness: "HMO", directoryType: "Directory", ipa: { desc: ipa }, pbp: plans,
+      addresses: [{ visitType: "Office", city: city.toUpperCase(), state: "CA", isAcceptingNewPatients: yes ? "Yes" : "No" }] });
+    const recs = { "1000000001": [rec("Talbert Medical Group", "Huntington Beach", true)], "1000000002": [rec("Talbert Medical Group", "Fountain Valley", false)] }[d && d.npi];
+    return Promise.resolve({ response: [{ providers: recs ? [{ npi: d.npi, nppes: { firstName: d.first, lastName: d.last }, ahRecords: recs }] : [] }] });
   }
   const carrier = carriers.find(c => c.base && url.startsWith(c.base)); const cid = carrier ? carrier.id : "";
   const nets = DEMO_DATA.nets.filter(n => n.carrier === cid);
