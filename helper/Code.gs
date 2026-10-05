@@ -20,6 +20,7 @@ var ALLOWED_HOSTS = [
   'public.fhir.flex.optum.com',
   'apif1.aetna.com',
   'totalview.healthos.elevancehealth.com',
+  'prod.totalview.healthos.elevancehealth.com',
   'api.interop.molinahealthcare.com',
   'directory.cms.gov',
   'providerdirectory.scanhealthplan.com',
