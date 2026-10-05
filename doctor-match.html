@@ -298,23 +298,30 @@ async function rolesFor(c, prac){
   return out;
 }
 
-// Batch-read records by id (Organization?_id=a,b,c). Falls back to one-by-one reads if the directory refuses.
-const batchOK = {};
+// Batch-read records by id (Organization?_id=a,b,c). If a directory rejects big batches, retry smaller
+// ones; if it rejects even small ones, fall back to one-by-one reads.
+const batchSize = {};
 async function prefetch(c, refs){
   const base = c.base.replace(/\/+$/, ""), byType = {};
   refs.forEach(r => { const [t, id] = r.split("/"); (byType[t] = byType[t] || []).push(id); });
-  const jobs = [];
-  for (const [t, ids] of Object.entries(byType)) for (let i = 0; i < ids.length; i += 40) jobs.push([t, ids.slice(i, i + 40)]);
-  await Promise.all(jobs.map(async ([t, ids]) => {
-    if (batchOK[c.id] === false) return;
-    try {
-      const got = bundleEntries(await getJSON(base + "/" + t + "?_id=" + ids.map(encodeURIComponent).join(",") + "&_count=" + ids.length));
-      const want = new Set(ids), hits = got.filter(r => r.resourceType === t && want.has(r.id));
-      hits.forEach(r => { cache[c.id + "|" + t + "/" + r.id] = Promise.resolve(r); });
-      if (hits.length) batchOK[c.id] = true; else if (got.length && !batchOK[c.id]) { batchOK[c.id] = false; return; }
-      ids.forEach(id => { const k = c.id + "|" + t + "/" + id; if (!cache[k] && batchOK[c.id]) cache[k] = Promise.resolve(null); });
-    } catch (e) { if (!batchOK[c.id]) batchOK[c.id] = false; }
-  }));
+  for (const [t, ids] of Object.entries(byType)) {
+    let todo = ids;
+    while (todo.length && (batchSize[c.id] || 40) > 1) {
+      const size = batchSize[c.id] || 40, failed = [];
+      const chunks = []; for (let i = 0; i < todo.length; i += size) chunks.push(todo.slice(i, i + size));
+      await Promise.all(chunks.map(async chunk => {
+        try {
+          const got = bundleEntries(await getJSON(base + "/" + t + "?_id=" + chunk.map(encodeURIComponent).join(",") + "&_count=" + chunk.length));
+          const want = new Set(chunk);
+          got.filter(r => r.resourceType === t && want.has(r.id)).forEach(r => { cache[c.id + "|" + t + "/" + r.id] = Promise.resolve(r); });
+          chunk.forEach(id => { const k = c.id + "|" + t + "/" + id; if (!cache[k]) cache[k] = Promise.resolve(null); });
+        } catch (e) { failed.push(...chunk); }
+      }));
+      if (!failed.length) break;
+      batchSize[c.id] = size >= 40 ? 10 : size >= 10 ? 3 : 1;   // shrink and retry what failed
+      todo = failed;
+    }
+  }
 }
 
 const orgNetCache = {};
